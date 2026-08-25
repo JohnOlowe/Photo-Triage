@@ -40,4 +40,7 @@ dependencies {
 
     // Recommended: Material components for standardizing your action buttons
     implementation("com.google.android.material:material:1.11.0")
+
+    // JVM unit tests for the pure-logic helpers (no device needed)
+    testImplementation("junit:junit:4.13.2")
 }

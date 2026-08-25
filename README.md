@@ -30,6 +30,31 @@ The app operates on shared storage using absolute paths, so it needs All Files A
 on Android 11+ (or storage permissions on older versions). On first launch it opens
 the relevant permission screen.
 
+## Signing (stable signature across builds)
+
+By default, Gradle signs debug builds with an auto-generated *debug* keystore that
+lives outside the project (`~/.android/debug.keystore`). That key changes whenever it
+is regenerated — e.g. on a new machine, after reinstalling your IDE, or when an
+on-device build tool creates a fresh key — which is why the APK signature was changing
+between builds.
+
+This project pins every build to a single keystore so the signature never changes:
+
+- `keystore/photo-triage.keystore` — a PKCS12 keystore committed to the repo.
+- `gradle.properties` — holds the keystore path, alias and passwords
+  (`PHOTO_TRIAGE_*`), which `app/build.gradle.kts` reads into a `signingConfigs`
+  entry named `stable`.
+- The `debug` build type uses the `stable` signing config. To sign `release` builds
+  with the same key, uncomment the `release` block in `app/build.gradle.kts`.
+
+> ⚠️ This keystore is for keeping *debug/development* builds stable. It is committed
+> to the repository and its password is in `gradle.properties`, so anyone with repo
+> access could sign APKs with it. If you ever publish this app, generate a separate,
+> private release keystore (e.g. `keytool -genkeypair -keystore release.jks -alias
+> release`) and keep it out of git. The first APK signed with this stable key cannot
+> update an install signed with your old debug key — uninstall the old app once, then
+> future updates will install over each other.
+
 ## Building
 
 Standard Android Gradle project (Java). Import in Android Studio and run, or:

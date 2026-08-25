@@ -31,6 +31,9 @@ jobs:
           yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
           "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 

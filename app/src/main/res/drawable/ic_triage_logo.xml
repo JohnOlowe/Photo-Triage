@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <!-- Background layer / secondary photo -->
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M2,6v14c0,1.1 0.9,2 2,2h14v-2H4V6H2z" />
+
+    <!-- Foreground photo with mountain/sun graphic -->
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M22,4h-14c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2v-12c0,-1.1 -0.9,-2 -2,-2zM20,18h-10l3.43,-4.57c0.22,-0.29 0.66,-0.3 0.89,-0.01l1.68,2.14l2.67,-3.56c0.22,-0.29 0.67,-0.29 0.89,0l2.44,3.26c0.28,0.37 0.01,0.9 -0.46,0.94l-1.54,1.8z" />
+
+</vector>

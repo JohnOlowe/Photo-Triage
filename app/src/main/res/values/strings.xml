@@ -1,4 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Photo Triage</string>
+
+    <!-- Main screen -->
+    <string name="source_default">Source</string>
+    <string name="source_button_format">Source: %1$s</string>
+    <string name="reload_deck">Reload</string>
+    <string name="settings">Settings</string>
+    <string name="tools">Tools</string>
+    <string name="add_folder">+ Add Folder</string>
+    <string name="skip_keep">Skip (Keep)</string>
+    <string name="select_source_title">Select Source Folder</string>
+    <string name="custom_source_title">Custom Source Folder</string>
+    <string name="custom_path_option">Custom path…</string>
+    <string name="use">Use</string>
+    <string name="remove_folder_title">Remove Folder?</string>
+    <string name="remove_folder_message">Hide \'%1$s\' from this list?</string>
+    <string name="remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="add">Add</string>
+    <string name="add_folder_title">Add New Folder</string>
+    <string name="folder_hint">e.g. Testimonies</string>
+    <string name="empty_or_duplicate">Empty or duplicate name</string>
+    <string name="folder_missing">Folder is empty or missing.</string>
+    <string name="permission_denied">Permission denied.</string>
+    <string name="grant_all_files_access">Please grant All Files Access and press back</string>
+    <string name="file_operation_failed">Could not move or copy photo.</string>
+
+    <!-- Settings screen -->
+    <string name="back">Back</string>
+    <string name="settings_title">Settings</string>
+    <string name="pref_root_folder">Root folder (destination base)</string>
+    <string name="pref_root_folder_hint">/storage/emulated/0/Pictures/…</string>
+    <string name="pref_inbox_folder">Inbox folder name</string>
+    <string name="pref_extensions">Image extensions (comma separated)</string>
+    <string name="sort_order_title">Sort order</string>
+    <string name="sort_name_asc">Name (A to Z)</string>
+    <string name="sort_name_desc">Name (Z to A)</string>
+    <string name="sort_date_asc">Oldest first</string>
+    <string name="sort_date_desc">Newest first</string>
+    <string name="file_operation_title">File operation</string>
+    <string name="op_move">Move (frees the source)</string>
+    <string name="op_copy">Copy (keeps the source)</string>
+    <string name="label_mode_title">Photo label</string>
+    <string name="label_auto">Auto (iPhone number)</string>
+    <string name="label_filename">Full filename</string>
+    <string name="label_index">Position number</string>
+    <string name="reset_defaults">Reset to defaults</string>
+    <string name="error_empty_value">Value cannot be empty.</string>
+    <string name="pref_sort_order_value">Sort order: %1$s</string>
+    <string name="pref_file_operation_value">Operation: %1$s</string>
+    <string name="pref_label_mode_value">Label: %1$s</string>
+
+    <!-- Tools screen -->
+    <string name="tools_title">Tools</string>
+    <string name="tool_organize">Reorganize photos (migrate)</string>
+    <string name="tool_organize_desc">Map numbered folders to clean names and pull matching high-res photos out of the inbox.</string>
+    <string name="tool_scan">Scan folder into gallery</string>
+    <string name="tool_scan_desc">Re-index a folder (and optionally its subfolders) with the media scanner.</string>
+    <string name="status_idle">Nothing run yet.</string>
+    <string name="status_running">Working…</string>
+    <string name="run">Run</string>
+    <string name="include_subfolders">Include subfolders</string>
+    <string name="tool_scan_title">Scan folder into gallery</string>
+    <string name="tool_scan_result">Scanned %1$d file(s).</string>
+    <string name="tool_organize_title">Reorganize photos</string>
+    <string name="field_source_dir">Source folder (numbered folders)</string>
+    <string name="field_dest_dir">Destination base folder</string>
+    <string name="field_inbox_dir">Inbox folder name</string>
+    <string name="field_folder_filter">Folder filter regex</string>
+    <string name="field_folder_prefix">Folder-name prefix to strip (regex)</string>
+    <string name="field_folder_separator">Folder-name separator to replace (regex)</string>
+    <string name="field_folder_renames">Folder renames (one per line: contains =&gt; new name)</string>
+    <string name="field_file_prefix">Filename prefix to strip (regex)</string>
+    <string name="delete_existing">Delete existing files in destination first</string>
+    <string name="copy_instead">Copy instead of move</string>
+    <string name="invalid_regex">Invalid regular expression: %1$s</string>
+    <string name="errors_prefix">%1$d problem(s) encountered.</string>
 </resources>

@@ -148,7 +148,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
 
         if (rvSplitPreview != null) {
             rvSplitPreview.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-            splitPreviewAdapter = new SplitPreviewAdapter(new ArrayList<>());
+            splitPreviewAdapter = new SplitPreviewAdapter();
             rvSplitPreview.setAdapter(splitPreviewAdapter);
         }
 
@@ -231,7 +231,18 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             Chip chip = group.findViewById(checkedIds.get(0));
             if (chip == null) return;
             String txt = chip.getText().toString();
-            if ("Free".equals(txt)) {
+            if (txt.startsWith("Base")) {
+                if (basePhoto != null && basePhoto.aspect > 0) {
+                    config.targetRatio = basePhoto.aspect;
+                    config.ratioLabel = "Base";
+                    // keep basePhoto
+                    updateBaseInfo();
+                } else if (basePhoto != null) {
+                    // dimensions not yet known, will update later
+                    config.targetRatio = 0;
+                    config.ratioLabel = "Base";
+                }
+            } else if ("Free".equals(txt)) {
                 config.targetRatio = 0;
                 config.ratioLabel = "Free";
                 if (basePhoto != null) { basePhoto.isBase = false; basePhoto = null; }
@@ -644,18 +655,25 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         runOnUiThread(() -> {
                             config.targetRatio = p.aspect;
                             config.ratioLabel = StudioConfig.labelForRatio(p.aspect);
-                            if (chipGroupRatio != null) chipGroupRatio.clearCheck();
+                            if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioBase);
                             updateBaseInfo();
                             refreshCurrentOnly();
                         });
                     } catch (Exception ignored) {}
                 });
+                updateBaseInfo();
+                if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioBase);
+                pagerAdapter.notifyDataSetChanged();
+                thumbsAdapter.notifyDataSetChanged();
+                refreshCurrentOnly();
                 return;
             }
             if (p.aspect > 0) {
                 config.targetRatio = p.aspect;
                 config.ratioLabel = StudioConfig.labelForRatio(p.aspect);
-                if (chipGroupRatio != null) chipGroupRatio.clearCheck();
+                if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioBase);
+            } else {
+                if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioBase);
             }
         }
         updateBaseInfo();
@@ -677,11 +695,29 @@ public class ResolutionStudioActivity extends AppCompatActivity {
     }
 
     private void updateBaseInfo() {
+        // Handle Base chip visibility
+        View baseChip = findViewById(R.id.chipRatioBase);
+        if (baseChip != null) {
+            if (basePhoto != null && basePhoto.width > 0) {
+                baseChip.setVisibility(View.VISIBLE);
+                String label = StudioConfig.labelForRatio(basePhoto.aspect);
+                if (baseChip instanceof com.google.android.material.chip.Chip) {
+                    ((com.google.android.material.chip.Chip) baseChip).setText("Base • " + label);
+                }
+            } else if (basePhoto != null) {
+                baseChip.setVisibility(View.VISIBLE);
+                if (baseChip instanceof com.google.android.material.chip.Chip) {
+                    ((com.google.android.material.chip.Chip) baseChip).setText("Base");
+                }
+            } else {
+                baseChip.setVisibility(View.GONE);
+            }
+        }
         if (tvBaseInfo == null) return;
         if (basePhoto != null && basePhoto.width > 0) {
             tvBaseInfo.setText("Base: " + basePhoto.name + " • " + basePhoto.width + "×" + basePhoto.height + " • " + StudioConfig.labelForRatio(basePhoto.aspect));
         } else if (config.targetRatio > 0) {
-            tvBaseInfo.setText("Target: " + config.ratioLabel + " • " + String.format("%.2f:1", config.targetRatio));
+            tvBaseInfo.setText("Target: " + config.ratioLabel + " • " + (config.targetRatio > 0 ? StudioConfig.labelForRatio(config.targetRatio) : config.ratioLabel));
         } else {
             tvBaseInfo.setText(R.string.studio_no_base);
         }
@@ -773,10 +809,35 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             return;
         }
         rvSplitPreview.setVisibility(View.VISIBLE);
-        List<File> halves = new ArrayList<>();
-        halves.add(cur.file);
-        halves.add(cur.file);
-        splitPreviewAdapter.update(halves);
+        // Generate real split preview: load small bitmap, apply current effective config (crop then split), show side-by-side
+        StudioConfig eff = cur.effectiveConfig(config);
+        bgExecutor.execute(() -> {
+            try {
+                Bitmap src = ImageProcessor.loadBitmap(cur.getDisplayFile(), 600);
+                if (src == null) return;
+                // Apply crop/fit etc. first, then split according to eff.splitMode
+                // Use transform then split to mirror applyCurrentCrop logic
+                int sw = src.getWidth();
+                int sh = src.getHeight();
+                Bitmap transformed = ImageProcessor.transform(src, eff, sw, sh);
+                if (transformed == null) return;
+                List<Bitmap> splits = ImageProcessor.split(transformed, eff);
+                // splits already contains the split halves; if none, just show transformed?
+                // For preview we want to show all splits side by side
+                List<Bitmap> previewList = splits.isEmpty() ? new ArrayList<Bitmap>() {{ add(transformed); }} : splits;
+                // Note: transformed is recycled inside split, so don't recycle again; previewList now owns bitmaps
+                runOnUiThread(() -> {
+                    // Ensure still current photo and still split mode
+                    if (getCurrentPhoto() == cur && config.splitMode != StudioConfig.SplitMode.NONE) {
+                        splitPreviewAdapter.updateBitmaps(new ArrayList<>(previewList));
+                    } else {
+                        for (Bitmap bm : previewList) if (bm != null && !bm.isRecycled()) bm.recycle();
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
     private void showGridPreview() {
@@ -1096,19 +1157,25 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
     }
 
-    static class SplitPreviewAdapter extends RecyclerView.Adapter<SplitPreviewAdapter.VH> {
-        List<File> files;
-        SplitPreviewAdapter(List<File> f) { files = f; }
-        void update(List<File> f) { files = f; notifyDataSetChanged(); }
+    class SplitPreviewAdapter extends RecyclerView.Adapter<SplitPreviewAdapter.VH> {
+        List<Bitmap> bitmaps = new ArrayList<>();
+        void updateBitmaps(List<Bitmap> b) {
+            // Recycle old
+            for (Bitmap bm : bitmaps) if (bm != null && !bm.isRecycled()) bm.recycle();
+            bitmaps = b != null ? b : new ArrayList<>();
+            notifyDataSetChanged();
+        }
+        void update(List<File> f) { /* legacy file path not used for split preview, keep for compat */ }
         @Override public VH onCreateViewHolder(ViewGroup p, int t) {
             View v = LayoutInflater.from(p.getContext()).inflate(R.layout.item_split_preview, p, false);
             return new VH(v);
         }
         @Override public void onBindViewHolder(VH h, int pos) {
-            File f = files.get(pos % Math.max(1, files.size()));
-            Glide.with(h.image.getContext()).load(f).centerCrop().into(h.image);
+            Bitmap bm = bitmaps.get(pos % Math.max(1, bitmaps.size()));
+            if (bm != null && !bm.isRecycled()) h.image.setImageBitmap(bm);
+            else h.image.setImageDrawable(null);
         }
-        @Override public int getItemCount() { return Math.min(files.size(), 2); }
+        @Override public int getItemCount() { return bitmaps.size(); }
         static class VH extends RecyclerView.ViewHolder {
             ImageView image;
             VH(View v) { super(v); image = v.findViewById(R.id.ivSplit); }

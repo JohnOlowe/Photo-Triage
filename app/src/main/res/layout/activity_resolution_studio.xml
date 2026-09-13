@@ -475,6 +475,14 @@
                             app:selectionRequired="false">
 
                             <com.google.android.material.chip.Chip
+                                android:id="@+id/chipRatioBase"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Base"
+                                android:visibility="gone"
+                                tools:visibility="visible" />
+                            <com.google.android.material.chip.Chip
                                 android:id="@+id/chipRatioFree"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"

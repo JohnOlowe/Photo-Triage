@@ -32,41 +32,7 @@ jobs:
           "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Run unit tests
-        run: |
-          set -o pipefail
-          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee /tmp/gradle_test.log
-          EXIT=${PIPESTATUS[0]}
-          echo "Gradle exit code $EXIT"
-          cat /tmp/gradle_test.log
-          exit $EXIT
-
-      - name: Post log as comment on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Posting log..."
-          LOG=$(tail -n 400 /tmp/gradle_test.log | head -c 5000 | tr '\n' ' ' | sed 's/\"/\\"/g')
-          echo "::error::$LOG"
-
-      - name: Show test reports on failure
-        if: always()
-        run: |
-          echo "=== TEST RESULTS ==="
-          find app/build -type f | head -n 200 || true
-          echo "--- gradle log tail ---"
-          tail -n 500 /tmp/gradle_test.log 2>&1 | head -n 800 || true
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            /tmp/gradle_test.log
-            app/build/test-results/
-            app/build/reports/
-          if-no-files-found: warn
+        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon

@@ -1,26 +1,23 @@
 package damjay.photo.triage;
 
 import android.app.AlertDialog;
-import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
-import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.button.MaterialButton;
@@ -30,7 +27,6 @@ import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -38,31 +34,31 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Resolution Studio — post-triage flexible studio for mixed resolutions.
- * Creative, highly flexible: base-photo ratio, crop anchors (top/side/both),
- * stretch vs letterbox, split before/after with seamless preview, per-photo overrides, discard, mixed resolutions.
- */
 public class ResolutionStudioActivity extends AppCompatActivity {
 
     private SettingsManager settings;
     private StudioConfig config = new StudioConfig();
-    private List<StudioPhoto> photos = new ArrayList<>();
+    private final List<StudioPhoto> photos = new ArrayList<>();
     private StudioPhoto basePhoto = null;
 
     private TextInputEditText etFolder, etCustomW, etCustomH, etTargetW, etTargetH, etOutput;
-    private TextView tvCount, tvBaseInfo, tvSelectedCount, tvStatus, tvSplitRatioValue;
+    private TextView tvStudioCount, tvBaseInfo, tvSelectedCount, tvPagerCount, tvPagerRatio, tvPagerRes, tvPagerBaseBadge, tvPagerDiscardBadge, tvSplitRatioValue, tvStudioStatus;
     private ChipGroup chipGroupRatio, chipGroupSplit;
     private MaterialButtonToggleGroup toggleFit, toggleSplitOrder;
     private SwitchMaterial switchKeepOriginal, switchMixed, switchAutoPanorama, switchSeamless;
     private Slider sliderSplit;
-    private RecyclerView rvPhotos, rvSplitPreview;
     private View noPhotos;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final ExecutorService bgDimExecutor = Executors.newFixedThreadPool(3);
-
-    private StudioPhotoAdapter adapter;
+    private View panelContainer, panelRatio, panelCrop, panelFit, panelSplit, panelMore;
+    private ViewPager2 vpStudio;
+    private RecyclerView rvThumbs, rvSplitPreview, rvStudioPhotosHidden;
+    private StudioPagerAdapter pagerAdapter;
+    private ThumbsAdapter thumbsAdapter;
     private SplitPreviewAdapter splitPreviewAdapter;
+
+    private final ExecutorService bgExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService dimExecutor = Executors.newFixedThreadPool(2);
+    private int currentPos = 0;
+    private View lastToolButton = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,10 +73,8 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        // Find views
         etFolder = findViewById(R.id.etStudioFolder);
-        tvCount = findViewById(R.id.tvStudioCount);
-        tvBaseInfo = findViewById(R.id.tvBaseInfo);
+        tvStudioCount = findViewById(R.id.tvStudioCount);
         etCustomW = findViewById(R.id.etCustomW);
         etCustomH = findViewById(R.id.etCustomH);
         etTargetW = findViewById(R.id.etTargetW);
@@ -96,186 +90,198 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         switchSeamless = findViewById(R.id.switchSeamless);
         sliderSplit = findViewById(R.id.sliderSplitRatio);
         tvSplitRatioValue = findViewById(R.id.tvSplitRatioValue);
-        rvPhotos = findViewById(R.id.rvStudioPhotos);
-        rvSplitPreview = findViewById(R.id.rvSplitPreview);
+        tvPagerCount = findViewById(R.id.tvPagerCount);
+        tvPagerRatio = findViewById(R.id.tvPagerRatio);
+        tvPagerRes = findViewById(R.id.tvPagerRes);
+        tvPagerBaseBadge = findViewById(R.id.tvPagerBaseBadge);
+        tvPagerDiscardBadge = findViewById(R.id.tvPagerDiscardBadge);
+        tvBaseInfo = findViewById(R.id.tvBaseInfo);
         tvSelectedCount = findViewById(R.id.tvSelectedCount);
-        tvStatus = findViewById(R.id.tvStudioStatus);
+        tvStudioStatus = findViewById(R.id.tvStudioStatus);
         noPhotos = findViewById(R.id.tvNoPhotos);
+        panelContainer = findViewById(R.id.panelContainer);
+        panelRatio = findViewById(R.id.panelRatio);
+        panelCrop = findViewById(R.id.panelCrop);
+        panelFit = findViewById(R.id.panelFit);
+        panelSplit = findViewById(R.id.panelSplit);
+        panelMore = findViewById(R.id.panelMore);
+        vpStudio = findViewById(R.id.vpStudio);
+        rvThumbs = findViewById(R.id.rvThumbs);
+        rvSplitPreview = findViewById(R.id.rvSplitPreview);
+        rvStudioPhotosHidden = findViewById(R.id.rvStudioPhotos);
 
-        // Folder: honor intent extra "folder" (from MainActivity/Tools) then fallback
         File defaultFolder = settings.getInboxFolder();
         String intentFolder = getIntent() != null ? getIntent().getStringExtra("folder") : null;
         if (intentFolder != null && !intentFolder.trim().isEmpty()) {
             File f = new File(intentFolder.trim());
-            if (f.exists()) defaultFolder = f;
-            else defaultFolder = new File(intentFolder.trim());
+            defaultFolder = f.exists() ? f : new File(intentFolder.trim());
         } else if (!defaultFolder.exists()) {
             List<String> cats = settings.getCategories();
             if (!cats.isEmpty()) defaultFolder = new File(settings.getRootFolder(), cats.get(0));
         }
-        etFolder.setText(defaultFolder.getAbsolutePath());
-        etOutput.setText(config.outputFolder.getAbsolutePath());
+        if (etFolder != null) etFolder.setText(defaultFolder.getAbsolutePath());
+        if (etOutput != null) etOutput.setText(config.outputFolder.getAbsolutePath());
 
         FolderPickerDialog.attach(this, etFolder, findViewById(R.id.btnBrowseStudioFolder), findViewById(R.id.btnPasteStudioFolder));
         FolderPickerDialog.attach(this, etOutput, findViewById(R.id.btnBrowseOutput), findViewById(R.id.btnPasteOutput));
 
-        findViewById(R.id.btnStudioReload).setOnClickListener(v -> loadPhotos());
-        findViewById(R.id.btnClearBase).setOnClickListener(v -> clearBase());
-        findViewById(R.id.btnApplyCustomRatio).setOnClickListener(v -> applyCustomRatio());
-        findViewById(R.id.btnSelectAll).setOnClickListener(v -> selectAll(true));
-        findViewById(R.id.btnDiscardSelected).setOnClickListener(v -> discardSelected());
-        findViewById(R.id.btnResetOverrides).setOnClickListener(v -> resetOverrides());
-        findViewById(R.id.btnExport).setOnClickListener(v -> export());
-
-        // Photos grid
-        rvPhotos.setLayoutManager(new GridLayoutManager(this, 2));
-        rvPhotos.setNestedScrollingEnabled(false);
-        adapter = new StudioPhotoAdapter(photos, new StudioPhotoAdapter.Listener() {
-            @Override public void onClick(StudioPhoto p, int pos) { showPreview(p); }
-            @Override public void onLongClick(StudioPhoto p, int pos) { showPerPhotoEdit(p, pos); }
-            @Override public void onBaseClick(StudioPhoto p, int pos) { setBase(p); }
-            @Override public void onDiscardToggle(StudioPhoto p, int pos, boolean discard) {
-                p.discarded = discard;
-                if (adapter != null) adapter.notifyItemChanged(pos);
-                updateCounts();
+        pagerAdapter = new StudioPagerAdapter();
+        vpStudio.setAdapter(pagerAdapter);
+        vpStudio.setOffscreenPageLimit(1);
+        vpStudio.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override public void onPageSelected(int position) {
+                currentPos = position;
+                syncThumbsToPager(position);
+                updatePagerOverlay(position);
             }
-            @Override public void onSelectToggle(StudioPhoto p, int pos, boolean selected) {
+        });
+
+        thumbsAdapter = new ThumbsAdapter();
+        rvThumbs.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        rvThumbs.setAdapter(thumbsAdapter);
+
+        if (rvSplitPreview != null) {
+            rvSplitPreview.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+            splitPreviewAdapter = new SplitPreviewAdapter(new ArrayList<>());
+            rvSplitPreview.setAdapter(splitPreviewAdapter);
+        }
+
+        View btnReload = findViewById(R.id.btnStudioReload);
+        if (btnReload != null) btnReload.setOnClickListener(v -> loadPhotos());
+
+        View btnExport = findViewById(R.id.btnExport);
+        if (btnExport != null) btnExport.setOnClickListener(v -> export());
+
+        setupToolBar();
+        setupRatioControls();
+        setupFitControls();
+        setupCropControls();
+        setupSplitControls();
+        setupMoreControls();
+
+        View btnPagerBase = findViewById(R.id.btnPagerBase);
+        if (btnPagerBase != null) btnPagerBase.setOnClickListener(v -> {
+            StudioPhoto p = getCurrentPhoto();
+            if (p != null) setBase(p);
+        });
+        View btnPagerDiscard = findViewById(R.id.btnPagerDiscard);
+        if (btnPagerDiscard != null) btnPagerDiscard.setOnClickListener(v -> {
+            StudioPhoto p = getCurrentPhoto();
+            if (p != null) {
+                p.discarded = !p.discarded;
+                pagerAdapter.notifyItemChanged(currentPos);
+                thumbsAdapter.notifyItemChanged(currentPos);
+                updatePagerOverlay(currentPos);
                 updateCounts();
             }
         });
-        rvPhotos.setAdapter(adapter);
 
-        rvSplitPreview.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-        splitPreviewAdapter = new SplitPreviewAdapter(new ArrayList<>());
-        rvSplitPreview.setAdapter(splitPreviewAdapter);
+        loadPhotos();
+        updateBaseInfo();
+        updatePagerOverlay(0);
+    }
 
-        // Ratio chips
+    private void setupToolBar() {
+        View r = findViewById(R.id.btnToolRatio);
+        View c = findViewById(R.id.btnToolCrop);
+        View f = findViewById(R.id.btnToolFit);
+        View s = findViewById(R.id.btnToolSplit);
+        View m = findViewById(R.id.btnToolMore);
+        if (r != null) r.setOnClickListener(v -> togglePanel(panelRatio, v));
+        if (c != null) c.setOnClickListener(v -> togglePanel(panelCrop, v));
+        if (f != null) f.setOnClickListener(v -> togglePanel(panelFit, v));
+        if (s != null) s.setOnClickListener(v -> togglePanel(panelSplit, v));
+        if (m != null) m.setOnClickListener(v -> togglePanel(panelMore, v));
+    }
+
+    private void togglePanel(View panel, View button) {
+        if (panel == null || panelContainer == null) return;
+        boolean isVisible = panel.getVisibility() == View.VISIBLE && panelContainer.getVisibility() == View.VISIBLE;
+        if (panelRatio != null) panelRatio.setVisibility(View.GONE);
+        if (panelCrop != null) panelCrop.setVisibility(View.GONE);
+        if (panelFit != null) panelFit.setVisibility(View.GONE);
+        if (panelSplit != null) panelSplit.setVisibility(View.GONE);
+        if (panelMore != null) panelMore.setVisibility(View.GONE);
+        resetToolButtons();
+        if (isVisible) {
+            panelContainer.setVisibility(View.GONE);
+            lastToolButton = null;
+        } else {
+            panel.setVisibility(View.VISIBLE);
+            panelContainer.setVisibility(View.VISIBLE);
+            if (button instanceof MaterialButton) {
+                ((MaterialButton) button).setStrokeWidth(2);
+                ((MaterialButton) button).setStrokeColor(getColor(R.color.light_primary));
+            }
+            lastToolButton = button;
+        }
+    }
+
+    private void resetToolButtons() {
+        int[] ids = {R.id.btnToolRatio, R.id.btnToolCrop, R.id.btnToolFit, R.id.btnToolSplit, R.id.btnToolMore};
+        for (int id : ids) {
+            View v = findViewById(id);
+            if (v instanceof MaterialButton) ((MaterialButton) v).setStrokeWidth(0);
+        }
+    }
+
+    private void setupRatioControls() {
+        if (chipGroupRatio == null) return;
         chipGroupRatio.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) return;
-            Chip c = group.findViewById(checkedIds.get(0));
-            String txt = c.getText().toString();
+            Chip chip = group.findViewById(checkedIds.get(0));
+            if (chip == null) return;
+            String txt = chip.getText().toString();
             if ("Free".equals(txt)) {
                 config.targetRatio = 0;
                 config.ratioLabel = "Free";
-                basePhoto = null;
+                if (basePhoto != null) { basePhoto.isBase = false; basePhoto = null; }
                 updateBaseInfo();
             } else {
                 float r = StudioConfig.ratioForLabel(txt);
                 if (r > 0) {
                     config.targetRatio = r;
                     config.ratioLabel = txt;
-                    // Clear base if preset chosen (user wants preset, not base)
-                    if (basePhoto != null) {
-                        basePhoto.isBase = false;
-                        basePhoto = null;
-                    }
+                    if (basePhoto != null) { basePhoto.isBase = false; basePhoto = null; }
                     updateBaseInfo();
                 }
             }
-            refreshAll();
+            refreshCurrentOnly();
         });
-
-        // Keep original
-        switchKeepOriginal.setOnCheckedChangeListener((v, checked) -> {
-            config.keepOriginalResolution = checked;
-            View tilW = findViewById(R.id.tilTargetW);
-            View tilH = findViewById(R.id.tilTargetH);
-            if (tilW != null) tilW.setEnabled(!checked);
-            if (tilH != null) tilH.setEnabled(!checked);
-            if (!checked) {
-                try {
-                    config.targetWidth = Integer.parseInt(etTargetW.getText().toString().trim());
-                    config.targetHeight = Integer.parseInt(etTargetH.getText().toString().trim());
-                } catch (Exception ignored) {}
+        View apply = findViewById(R.id.btnApplyCustomRatio);
+        if (apply != null) apply.setOnClickListener(v -> {
+            try {
+                int w = Integer.parseInt(etCustomW.getText().toString().trim());
+                int h = Integer.parseInt(etCustomH.getText().toString().trim());
+                if (w <= 0 || h <= 0) throw new NumberFormatException();
+                config.targetRatio = (float) w / h;
+                config.ratioLabel = w + ":" + h;
+                if (basePhoto != null) { basePhoto.isBase = false; basePhoto = null; }
+                if (chipGroupRatio != null) chipGroupRatio.clearCheck();
+                updateBaseInfo();
+                refreshCurrentOnly();
+                Toast.makeText(this, "Ratio " + w + ":" + h, Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, R.string.error_empty_value, Toast.LENGTH_SHORT).show();
             }
-            refreshAll();
         });
+        View clear = findViewById(R.id.btnClearBase);
+        if (clear != null) clear.setOnClickListener(v -> clearBase());
+    }
 
-        // Target W/H editors
-        TextWatcher resWatcher = new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) {
-                if (!switchKeepOriginal.isChecked()) {
-                    try {
-                        config.targetWidth = Integer.parseInt(etTargetW.getText().toString().trim());
-                        config.targetHeight = Integer.parseInt(etTargetH.getText().toString().trim());
-                        if (config.targetWidth > 0 && config.targetHeight > 0) {
-                            // If free ratio, update ratio to match target
-                            if (config.targetRatio == 0) {
-                                config.targetRatio = (float) config.targetWidth / config.targetHeight;
-                                config.ratioLabel = StudioConfig.labelForRatio(config.targetRatio);
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                    refreshAll();
-                }
-            }
-        };
-        etTargetW.addTextChangedListener(resWatcher);
-        etTargetH.addTextChangedListener(resWatcher);
-
-        // Mixed
-        switchMixed.setOnCheckedChangeListener((v, c) -> {
-            config.allowMixedResolutions = c;
-            refreshAll();
-        });
-        switchAutoPanorama.setOnCheckedChangeListener((v, c) -> {
-            config.autoPanorama = c;
-            refreshAll();
-        });
-        switchSeamless.setOnCheckedChangeListener((v, c) -> {
-            config.seamlessGap = c;
-            config.gapPx = c ? 0 : 2;
-            refreshAll();
-        });
-
-        // Fit mode
+    private void setupFitControls() {
+        if (toggleFit == null) return;
         toggleFit.addOnButtonCheckedListener((group, id, checked) -> {
             if (!checked) return;
             if (id == R.id.btnFitCrop) config.fitMode = StudioConfig.FitMode.CROP;
             else if (id == R.id.btnFitStretch) config.fitMode = StudioConfig.FitMode.STRETCH;
             else if (id == R.id.btnFitLetterbox) config.fitMode = StudioConfig.FitMode.LETTERBOX;
-            refreshAll();
+            refreshCurrentOnly();
         });
         toggleFit.check(R.id.btnFitCrop);
-
-        // Crop gravity: wire all 11 buttons
-        setupCropButtons();
-
-        // Split
-        chipGroupSplit.setOnCheckedStateChangeListener((g, ids) -> {
-            if (ids.isEmpty()) return;
-            Chip c = g.findViewById(ids.get(0));
-            String t = c.getText().toString();
-            if (t.contains("None")) config.splitMode = StudioConfig.SplitMode.NONE;
-            else if (t.contains("Vertical → 2")) config.splitMode = StudioConfig.SplitMode.VERTICAL_2;
-            else if (t.contains("Horizontal → 2")) config.splitMode = StudioConfig.SplitMode.HORIZONTAL_2;
-            else if (t.contains("Vertical → 3")) config.splitMode = StudioConfig.SplitMode.VERTICAL_3;
-            refreshAll();
-        });
-        toggleSplitOrder.addOnButtonCheckedListener((g, id, checked) -> {
-            if (!checked) return;
-            if (id == R.id.btnOrderCropSplit) config.splitOrder = StudioConfig.SplitOrder.CROP_THEN_SPLIT;
-            else config.splitOrder = StudioConfig.SplitOrder.SPLIT_THEN_CROP;
-            refreshAll();
-        });
-        toggleSplitOrder.check(R.id.btnOrderCropSplit);
-        sliderSplit.addOnChangeListener((slider, value, fromUser) -> {
-            if (!fromUser) return;
-            config.splitRatio = value / 100f;
-            tvSplitRatioValue.setText(Math.round(value) + "% / " + (100 - Math.round(value)) + "%");
-            refreshAll();
-        });
-
-
-
-        // Initial load
-        loadPhotos();
-        updateBaseInfo();
     }
 
-    private void setupCropButtons() {
+    private void setupCropControls() {
         View.OnClickListener l = v -> {
             int id = v.getId();
             StudioConfig.CropGravity g = StudioConfig.CropGravity.CENTER;
@@ -292,7 +298,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             else if (id == R.id.btnCropBothTB) g = StudioConfig.CropGravity.BOTH_TOP_BOTTOM;
             config.cropGravity = g;
             highlightCrop(g);
-            refreshAll();
+            refreshCurrentOnly();
         };
         int[] ids = {R.id.btnCropCenter, R.id.btnCropTop, R.id.btnCropBottom, R.id.btnCropLeft, R.id.btnCropRight,
                 R.id.btnCropTopLeft, R.id.btnCropTopRight, R.id.btnCropBottomLeft, R.id.btnCropBottomRight,
@@ -305,15 +311,12 @@ public class ResolutionStudioActivity extends AppCompatActivity {
     }
 
     private void highlightCrop(StudioConfig.CropGravity g) {
-        // Reset all to outlined, then highlight selected as tonal
         int[] ids = {R.id.btnCropCenter, R.id.btnCropTop, R.id.btnCropBottom, R.id.btnCropLeft, R.id.btnCropRight,
                 R.id.btnCropTopLeft, R.id.btnCropTopRight, R.id.btnCropBottomLeft, R.id.btnCropBottomRight,
                 R.id.btnCropBothSides, R.id.btnCropBothTB};
         for (int id : ids) {
             View v = findViewById(id);
-            if (v instanceof MaterialButton) {
-                ((MaterialButton) v).setStrokeWidth(1);
-            }
+            if (v instanceof MaterialButton) ((MaterialButton) v).setStrokeWidth(1);
         }
         int sel = R.id.btnCropCenter;
         switch (g) {
@@ -330,13 +333,114 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             default: sel = R.id.btnCropCenter; break;
         }
         View sv = findViewById(sel);
-        if (sv instanceof MaterialButton) {
-            ((MaterialButton) sv).setStrokeWidth(3);
+        if (sv instanceof MaterialButton) ((MaterialButton) sv).setStrokeWidth(3);
+    }
+
+    private void setupSplitControls() {
+        if (chipGroupSplit == null) return;
+        chipGroupSplit.setOnCheckedStateChangeListener((g, ids) -> {
+            if (ids.isEmpty()) return;
+            Chip c = g.findViewById(ids.get(0));
+            if (c == null) return;
+            String t = c.getText().toString();
+            if (t.contains("None")) config.splitMode = StudioConfig.SplitMode.NONE;
+            else if (t.contains("Vertical") && t.contains("2")) config.splitMode = StudioConfig.SplitMode.VERTICAL_2;
+            else if (t.contains("Horizontal")) config.splitMode = StudioConfig.SplitMode.HORIZONTAL_2;
+            else if (t.contains("Vertical") && t.contains("3")) config.splitMode = StudioConfig.SplitMode.VERTICAL_3;
+            refreshCurrentOnly();
+            updateSplitPreviewLazy();
+        });
+        if (toggleSplitOrder != null) {
+            toggleSplitOrder.addOnButtonCheckedListener((g, id, checked) -> {
+                if (!checked) return;
+                if (id == R.id.btnOrderCropSplit) config.splitOrder = StudioConfig.SplitOrder.CROP_THEN_SPLIT;
+                else config.splitOrder = StudioConfig.SplitOrder.SPLIT_THEN_CROP;
+                refreshCurrentOnly();
+                updateSplitPreviewLazy();
+            });
+            toggleSplitOrder.check(R.id.btnOrderCropSplit);
+        }
+        if (sliderSplit != null) {
+            sliderSplit.addOnChangeListener((slider, value, fromUser) -> {
+                if (!fromUser) return;
+                config.splitRatio = value / 100f;
+                if (tvSplitRatioValue != null) tvSplitRatioValue.setText(Math.round(value) + "% / " + (100 - Math.round(value)) + "%");
+                refreshCurrentOnly();
+                updateSplitPreviewLazy();
+            });
+        }
+        if (switchSeamless != null) {
+            switchSeamless.setOnCheckedChangeListener((v, c) -> {
+                config.seamlessGap = c;
+                config.gapPx = c ? 0 : 2;
+                refreshCurrentOnly();
+                updateSplitPreviewLazy();
+            });
         }
     }
 
+    private void setupMoreControls() {
+        if (switchKeepOriginal != null) {
+            switchKeepOriginal.setOnCheckedChangeListener((v, checked) -> {
+                config.keepOriginalResolution = checked;
+                View tilW = findViewById(R.id.tilTargetW);
+                View tilH = findViewById(R.id.tilTargetH);
+                if (tilW != null) tilW.setEnabled(!checked);
+                if (tilH != null) tilH.setEnabled(!checked);
+                if (!checked) {
+                    try {
+                        config.targetWidth = Integer.parseInt(etTargetW.getText().toString().trim());
+                        config.targetHeight = Integer.parseInt(etTargetH.getText().toString().trim());
+                    } catch (Exception ignored) {}
+                }
+                refreshCurrentOnly();
+            });
+        }
+        TextWatcher resWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            @Override public void onTextChanged(CharSequence s, int st, int b, int c) {}
+            @Override public void afterTextChanged(Editable s) {
+                if (switchKeepOriginal != null && !switchKeepOriginal.isChecked()) {
+                    try {
+                        config.targetWidth = Integer.parseInt(etTargetW.getText().toString().trim());
+                        config.targetHeight = Integer.parseInt(etTargetH.getText().toString().trim());
+                        if (config.targetWidth > 0 && config.targetHeight > 0 && config.targetRatio == 0) {
+                            config.targetRatio = (float) config.targetWidth / config.targetHeight;
+                            config.ratioLabel = StudioConfig.labelForRatio(config.targetRatio);
+                            updateBaseInfo();
+                        }
+                    } catch (Exception ignored) {}
+                    refreshCurrentOnly();
+                }
+            }
+        };
+        if (etTargetW != null) etTargetW.addTextChangedListener(resWatcher);
+        if (etTargetH != null) etTargetH.addTextChangedListener(resWatcher);
+
+        if (switchMixed != null) switchMixed.setOnCheckedChangeListener((v, c) -> { config.allowMixedResolutions = c; refreshCurrentOnly(); });
+        if (switchAutoPanorama != null) switchAutoPanorama.setOnCheckedChangeListener((v, c) -> { config.autoPanorama = c; refreshCurrentOnly(); });
+
+        View selAll = findViewById(R.id.btnSelectAll);
+        if (selAll != null) selAll.setOnClickListener(v -> { for (StudioPhoto p : photos) p.selected = true; thumbsAdapter.notifyDataSetChanged(); updateCounts(); });
+        View discSel = findViewById(R.id.btnDiscardSelected);
+        if (discSel != null) discSel.setOnClickListener(v -> {
+            for (StudioPhoto p : photos) if (p.selected) p.discarded = true;
+            pagerAdapter.notifyDataSetChanged();
+            thumbsAdapter.notifyDataSetChanged();
+            updatePagerOverlay(currentPos);
+            updateCounts();
+        });
+        View reset = findViewById(R.id.btnResetOverrides);
+        if (reset != null) reset.setOnClickListener(v -> {
+            for (StudioPhoto p : photos) p.clearOverrides();
+            pagerAdapter.notifyDataSetChanged();
+            thumbsAdapter.notifyDataSetChanged();
+            refreshCurrentOnly();
+        });
+    }
+
     private void loadPhotos() {
-        String path = etFolder.getText().toString().trim();
+        String path = etFolder != null ? etFolder.getText().toString().trim() : "";
         if (path.isEmpty()) {
             Toast.makeText(this, R.string.error_empty_value, Toast.LENGTH_SHORT).show();
             return;
@@ -345,70 +449,80 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         if (!dir.exists() || !dir.isDirectory()) {
             Toast.makeText(this, R.string.folder_missing, Toast.LENGTH_SHORT).show();
             photos.clear();
-            if (adapter != null) adapter.notifyDataSetChanged();
+            pagerAdapter.notifyDataSetChanged();
+            thumbsAdapter.notifyDataSetChanged();
             updateCounts();
+            updatePagerOverlay(0);
             return;
         }
-        tvStatus.setText(R.string.status_running);
-        executor.execute(() -> {
+        if (tvStudioStatus != null) tvStudioStatus.setText(R.string.status_running);
+        bgExecutor.execute(() -> {
             List<File> files = FileUtils.collectImages(dir, false, settings.getImageExtensions());
             files.sort(settings.getFileComparator());
             List<StudioPhoto> newList = new ArrayList<>();
             for (File f : files) newList.add(new StudioPhoto(f));
-
-            // Preload dimensions in background pool
-            for (StudioPhoto p : newList) {
-                bgDimExecutor.execute(() -> {
-                    try {
-                        ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
-                        p.setDimensions(d.width, d.height);
-                        runOnUiThread(() -> {
-                            if (adapter != null) adapter.notifyDataSetChanged();
-                            updateCounts();
-                            updateSplitPreview();
-                        });
-                    } catch (Exception ignored) {}
-                });
-            }
-
             runOnUiThread(() -> {
                 photos.clear();
                 photos.addAll(newList);
-                // Preserve base if still exists
                 if (basePhoto != null) {
                     boolean found = false;
                     for (StudioPhoto p : photos) if (p.file.equals(basePhoto.file)) { p.isBase = true; basePhoto = p; found = true; break; }
                     if (!found) basePhoto = null;
                 }
-                if (adapter != null) adapter.notifyDataSetChanged();
+                currentPos = 0;
+                pagerAdapter.notifyDataSetChanged();
+                thumbsAdapter.notifyDataSetChanged();
+                if (!photos.isEmpty() && vpStudio != null) vpStudio.setCurrentItem(0, false);
                 updateCounts();
-                updateSplitPreview();
-                tvStatus.setText(getString(R.string.tool_scan_result, photos.size()));
+                updatePagerOverlay(0);
+                updateSplitPreviewLazy();
+                if (tvStudioStatus != null) tvStudioStatus.setText(getString(R.string.tool_scan_result, photos.size()));
                 if (photos.isEmpty()) Toast.makeText(this, R.string.studio_no_photos, Toast.LENGTH_SHORT).show();
             });
         });
     }
 
+    private StudioPhoto getCurrentPhoto() {
+        if (photos.isEmpty() || currentPos < 0 || currentPos >= photos.size()) return null;
+        return photos.get(currentPos);
+    }
+
     private void setBase(StudioPhoto p) {
         if (basePhoto != null) basePhoto.isBase = false;
-        if (p == basePhoto) { // toggle off
+        if (p == basePhoto) {
             basePhoto = null;
             config.targetRatio = 0;
             config.ratioLabel = "Free";
-            chipGroupRatio.check(R.id.chipRatioFree);
+            if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioFree);
         } else {
             p.isBase = true;
             basePhoto = p;
+            if (p.aspect == 0 && p.width == 0) {
+                dimExecutor.execute(() -> {
+                    try {
+                        ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
+                        p.setDimensions(d.width, d.height);
+                        runOnUiThread(() -> {
+                            config.targetRatio = p.aspect;
+                            config.ratioLabel = StudioConfig.labelForRatio(p.aspect);
+                            if (chipGroupRatio != null) chipGroupRatio.clearCheck();
+                            updateBaseInfo();
+                            refreshCurrentOnly();
+                        });
+                    } catch (Exception ignored) {}
+                });
+                return;
+            }
             if (p.aspect > 0) {
                 config.targetRatio = p.aspect;
                 config.ratioLabel = StudioConfig.labelForRatio(p.aspect);
-                // Update chips: select no preset or custom? Show base info, uncheck group?
-                chipGroupRatio.clearCheck();
+                if (chipGroupRatio != null) chipGroupRatio.clearCheck();
             }
         }
         updateBaseInfo();
-        if (adapter != null) adapter.notifyDataSetChanged();
-        refreshAll();
+        pagerAdapter.notifyDataSetChanged();
+        thumbsAdapter.notifyDataSetChanged();
+        refreshCurrentOnly();
     }
 
     private void clearBase() {
@@ -416,13 +530,15 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         basePhoto = null;
         config.targetRatio = 0;
         config.ratioLabel = "Free";
-        chipGroupRatio.check(R.id.chipRatioFree);
+        if (chipGroupRatio != null) chipGroupRatio.check(R.id.chipRatioFree);
         updateBaseInfo();
-        if (adapter != null) adapter.notifyDataSetChanged();
-        refreshAll();
+        pagerAdapter.notifyDataSetChanged();
+        thumbsAdapter.notifyDataSetChanged();
+        refreshCurrentOnly();
     }
 
     private void updateBaseInfo() {
+        if (tvBaseInfo == null) return;
         if (basePhoto != null && basePhoto.width > 0) {
             tvBaseInfo.setText("Base: " + basePhoto.name + " • " + basePhoto.width + "×" + basePhoto.height + " • " + StudioConfig.labelForRatio(basePhoto.aspect));
         } else if (config.targetRatio > 0) {
@@ -432,138 +548,102 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
     }
 
-    private void applyCustomRatio() {
-        try {
-            int w = Integer.parseInt(etCustomW.getText().toString().trim());
-            int h = Integer.parseInt(etCustomH.getText().toString().trim());
-            if (w <= 0 || h <= 0) throw new NumberFormatException();
-            float r = (float) w / h;
-            config.targetRatio = r;
-            config.ratioLabel = w + ":" + h;
-            if (basePhoto != null) { basePhoto.isBase = false; basePhoto = null; }
-            chipGroupRatio.clearCheck();
-            updateBaseInfo();
-            refreshAll();
-            Toast.makeText(this, "Ratio " + w + ":" + h, Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Toast.makeText(this, R.string.error_empty_value, Toast.LENGTH_SHORT).show();
-        }
-    }
-
     private void updateCounts() {
-        if (tvCount == null || noPhotos == null || rvPhotos == null) return;
-        if (photos.isEmpty()) {
-            tvCount.setText("0 photos");
-            noPhotos.setVisibility(View.VISIBLE);
-            rvPhotos.setVisibility(View.GONE);
-        } else {
-            // Count varied resolutions
-            int varied = 0;
-            String first = photos.get(0).width + "x" + photos.get(0).height;
-            for (StudioPhoto p : photos) if (!(p.width + "x" + p.height).equals(first)) varied++;
-            tvCount.setText(getString(R.string.studio_photos_count, photos.size(), varied));
-            noPhotos.setVisibility(View.GONE);
-            rvPhotos.setVisibility(View.VISIBLE);
+        if (tvStudioCount != null) {
+            if (photos.isEmpty()) tvStudioCount.setText("0");
+            else {
+                tvStudioCount.setText(String.valueOf(photos.size()));
+                String first = photos.size() > 0 && photos.get(0).width > 0 ? photos.get(0).width + "x" + photos.get(0).height : "";
+                int varied = 0;
+                for (StudioPhoto p : photos) if (p.width > 0 && !(p.width + "x" + p.height).equals(first)) varied++;
+                if (varied > 0) tvStudioCount.setText(photos.size() + " • " + varied + " varied");
+            }
         }
-        int sel = 0, discarded = 0;
-        for (StudioPhoto p : photos) { if (p.selected) sel++; if (p.discarded) discarded++; }
-        tvSelectedCount.setText(getString(R.string.studio_selected_count, sel) + (discarded > 0 ? " • " + discarded + " trashed" : ""));
+        if (tvSelectedCount != null) {
+            int sel = 0, discarded = 0;
+            for (StudioPhoto p : photos) { if (p.selected) sel++; if (p.discarded) discarded++; }
+            tvSelectedCount.setText(getString(R.string.studio_selected_count, sel) + (discarded > 0 ? " • " + discarded + " trashed" : ""));
+        }
+        if (noPhotos != null) {
+            boolean empty = photos.isEmpty();
+            noPhotos.setVisibility(empty ? View.VISIBLE : View.GONE);
+            if (vpStudio != null) vpStudio.setVisibility(empty ? View.INVISIBLE : View.VISIBLE);
+        }
     }
 
-    private void selectAll(boolean sel) {
-        for (StudioPhoto p : photos) p.selected = sel;
-        if (adapter != null) adapter.notifyDataSetChanged();
-        updateCounts();
+    private void updatePagerOverlay(int pos) {
+        if (photos.isEmpty() || pos < 0 || pos >= photos.size()) {
+            if (tvPagerCount != null) tvPagerCount.setText("0 / 0");
+            if (tvPagerRatio != null) tvPagerRatio.setText("Free");
+            if (tvPagerRes != null) tvPagerRes.setText("-");
+            if (tvPagerBaseBadge != null) tvPagerBaseBadge.setVisibility(View.GONE);
+            if (tvPagerDiscardBadge != null) tvPagerDiscardBadge.setVisibility(View.GONE);
+            return;
+        }
+        StudioPhoto p = photos.get(pos);
+        if (tvPagerCount != null) tvPagerCount.setText((pos + 1) + " / " + photos.size());
+        StudioConfig eff = p.effectiveConfig(config);
+        String ratioLabel = eff.targetRatio > 0 ? StudioConfig.labelForRatio(eff.targetRatio) : "Free";
+        if (tvPagerRatio != null) tvPagerRatio.setText(ratioLabel + (p.hasOverride() ? " • " + getString(R.string.studio_overridden) : ""));
+        if (p.width > 0) {
+            if (tvPagerRes != null) tvPagerRes.setText(p.width + "×" + p.height);
+        } else {
+            if (tvPagerRes != null) tvPagerRes.setText("…");
+            dimExecutor.execute(() -> {
+                try {
+                    ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
+                    p.setDimensions(d.width, d.height);
+                    runOnUiThread(() -> {
+                        if (currentPos == pos) {
+                            if (tvPagerRes != null) tvPagerRes.setText(d.width + "×" + d.height);
+                            if (p.isBase) updateBaseInfo();
+                            thumbsAdapter.notifyItemChanged(pos);
+                        }
+                    });
+                } catch (Exception ignored) {}
+            });
+        }
+        if (tvPagerBaseBadge != null) tvPagerBaseBadge.setVisibility(p.isBase ? View.VISIBLE : View.GONE);
+        if (tvPagerDiscardBadge != null) tvPagerDiscardBadge.setVisibility(p.discarded ? View.VISIBLE : View.GONE);
     }
 
-    private void discardSelected() {
-        for (StudioPhoto p : photos) if (p.selected) p.discarded = true;
-        if (adapter != null) adapter.notifyDataSetChanged();
-        updateCounts();
-        Toast.makeText(this, "Marked selected as discarded", Toast.LENGTH_SHORT).show();
+    private void syncThumbsToPager(int pos) {
+        if (rvThumbs != null && thumbsAdapter != null) {
+            RecyclerView.LayoutManager lm = rvThumbs.getLayoutManager();
+            if (lm instanceof LinearLayoutManager) {
+                ((LinearLayoutManager) lm).scrollToPositionWithOffset(pos, 100);
+            }
+            thumbsAdapter.setSelected(pos);
+        }
     }
 
-    private void resetOverrides() {
-        for (StudioPhoto p : photos) p.clearOverrides();
-        if (adapter != null) adapter.notifyDataSetChanged();
-        Toast.makeText(this, "Overrides cleared", Toast.LENGTH_SHORT).show();
+    private void refreshCurrentOnly() {
+        if (pagerAdapter != null && !photos.isEmpty() && currentPos >= 0 && currentPos < photos.size()) {
+            pagerAdapter.notifyItemChanged(currentPos);
+            updatePagerOverlay(currentPos);
+        }
+        if (thumbsAdapter != null && currentPos >= 0 && currentPos < photos.size()) thumbsAdapter.notifyItemChanged(currentPos);
+        updateSplitPreviewLazy();
     }
 
-    private void refreshAll() {
-        if (adapter != null) adapter.notifyDataSetChanged();
-        if (rvSplitPreview != null) updateSplitPreview();
-    }
-
-    private void updateSplitPreview() {
+    private void updateSplitPreviewLazy() {
         if (rvSplitPreview == null || splitPreviewAdapter == null) return;
-        if (photos.isEmpty() || config.splitMode == StudioConfig.SplitMode.NONE) {
+        StudioPhoto cur = getCurrentPhoto();
+        if (cur == null || config.splitMode == StudioConfig.SplitMode.NONE) {
             rvSplitPreview.setVisibility(View.GONE);
             return;
         }
         rvSplitPreview.setVisibility(View.VISIBLE);
-        // Pick first non-discarded photo for preview, or first
-        StudioPhoto preview = null;
-        for (StudioPhoto p : photos) if (!p.discarded) { preview = p; break; }
-        if (preview == null) preview = photos.get(0);
-        File f = preview.file;
         List<File> halves = new ArrayList<>();
-        halves.add(f);
-        halves.add(f);
+        halves.add(cur.file);
+        halves.add(cur.file);
         splitPreviewAdapter.update(halves);
-    }
-
-    private void showPreview(StudioPhoto p) {
-        View v = LayoutInflater.from(this).inflate(R.layout.dialog_studio_preview, null);
-        ImageView ivBefore = v.findViewById(R.id.ivPreviewBefore);
-        ImageView ivAfter = v.findViewById(R.id.ivPreviewAfter);
-        TextView tvInfo = v.findViewById(R.id.tvPreviewInfo);
-        TextView tvTitle = v.findViewById(R.id.tvPreviewTitle);
-        tvTitle.setText(p.name);
-
-        Glide.with(this).load(p.file).into(ivBefore);
-
-        // Generate after preview via processor (on background)
-        tvInfo.setText(p.width + "×" + p.height + " → processing…");
-        new Thread(() -> {
-            try {
-                Bitmap bmp = ImageProcessor.loadBitmap(p.file, 800);
-                if (bmp != null) {
-                    StudioConfig eff = p.effectiveConfig(config);
-                    // Use dimensions for processing
-                    ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
-                    Bitmap after = ImageProcessor.transform(bmp, eff, d.width, d.height);
-                    List<Bitmap> splits = ImageProcessor.split(after, eff);
-                    Bitmap display = splits.get(0);
-                    // If split, maybe show first half? For preview we show first half
-                    runOnUiThread(() -> {
-                        ivAfter.setImageBitmap(display);
-                        String info = d.width + "×" + d.height + " → " + display.getWidth() + "×" + display.getHeight()
-                                + " • " + eff.cropGravity.name() + " • " + eff.fitMode.name()
-                                + (eff.splitMode != StudioConfig.SplitMode.NONE ? " • Split " + eff.splitMode.name() : "");
-                        tvInfo.setText(info);
-                        // Halves recycler
-                        View halvesLayout = v.findViewById(R.id.layoutSplitHalves);
-                        RecyclerView rvHalves = v.findViewById(R.id.rvPreviewHalves);
-                        if (splits.size() > 1) {
-                            halvesLayout.setVisibility(View.VISIBLE);
-                            rvHalves.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-                            PreviewHalvesAdapter ha = new PreviewHalvesAdapter(splits);
-                            rvHalves.setAdapter(ha);
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                runOnUiThread(() -> tvInfo.setText("Preview failed: " + e.getMessage()));
-            }
-        }).start();
-
-        new AlertDialog.Builder(this).setView(v).setPositiveButton(R.string.cancel, null).show();
     }
 
     private void showPerPhotoEdit(StudioPhoto p, int pos) {
         View v = LayoutInflater.from(this).inflate(R.layout.dialog_studio_photo_edit, null);
         TextView tvName = v.findViewById(R.id.tvEditPhotoName);
-        tvName.setText(p.name + " • " + p.width + "×" + p.height);
+        tvName.setText(p.name + (p.width > 0 ? " • " + p.width + "×" + p.height : ""));
 
         ChipGroup cgCrop = v.findViewById(R.id.chipGroupEditCrop);
         ChipGroup cgFit = v.findViewById(R.id.chipGroupEditFit);
@@ -571,52 +651,47 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         View btnDiscard = v.findViewById(R.id.btnEditDiscard);
         View btnClear = v.findViewById(R.id.btnEditClear);
 
-        // Pre-select
-        // Crop
-        int cropIdx = 0;
         if (p.overrideCrop != null) {
+            int idx = 0;
             switch (p.overrideCrop) {
-                case CENTER: cropIdx = 1; break;
-                case TOP: cropIdx = 2; break;
-                case BOTTOM: cropIdx = 3; break;
-                case LEFT: cropIdx = 4; break;
-                case RIGHT: cropIdx = 5; break;
-                case BOTH_SIDES: cropIdx = 6; break;
-                case BOTH_TOP_BOTTOM: cropIdx = 7; break;
-                default: cropIdx = 1; break;
+                case CENTER: idx = 1; break;
+                case TOP: idx = 2; break;
+                case BOTTOM: idx = 3; break;
+                case LEFT: idx = 4; break;
+                case RIGHT: idx = 5; break;
+                case BOTH_SIDES: idx = 6; break;
+                case BOTH_TOP_BOTTOM: idx = 7; break;
+                default: idx = 1; break;
             }
-            ((Chip) cgCrop.getChildAt(cropIdx)).setChecked(true);
-        } else {
-            ((Chip) cgCrop.getChildAt(0)).setChecked(true);
-        }
-        // Fit
-        int fitIdx = 0;
+            if (cgCrop != null && cgCrop.getChildCount() > idx) ((Chip) cgCrop.getChildAt(idx)).setChecked(true);
+        } else if (cgCrop != null && cgCrop.getChildCount() > 0) ((Chip) cgCrop.getChildAt(0)).setChecked(true);
+
         if (p.overrideFit != null) {
+            int idx = 0;
             switch (p.overrideFit) {
-                case CROP: fitIdx = 1; break;
-                case STRETCH: fitIdx = 2; break;
-                case LETTERBOX: fitIdx = 3; break;
+                case CROP: idx = 1; break;
+                case STRETCH: idx = 2; break;
+                case LETTERBOX: idx = 3; break;
             }
-            ((Chip) cgFit.getChildAt(fitIdx)).setChecked(true);
-        }
-        // Split
-        int splitIdx = 0;
-        if (p.overrideSplit != null) {
-            switch (p.overrideSplit) {
-                case NONE: splitIdx = 1; break;
-                case VERTICAL_2: splitIdx = 2; break;
-                case HORIZONTAL_2: splitIdx = 3; break;
-            }
-            ((Chip) cgSplit.getChildAt(splitIdx)).setChecked(true);
+            if (cgFit != null && cgFit.getChildCount() > idx) ((Chip) cgFit.getChildAt(idx)).setChecked(true);
         }
 
-        AlertDialog dlg = new AlertDialog.Builder(this).setView(v)
+        if (p.overrideSplit != null) {
+            int idx = 0;
+            switch (p.overrideSplit) {
+                case NONE: idx = 1; break;
+                case VERTICAL_2: idx = 2; break;
+                case HORIZONTAL_2: idx = 3; break;
+            }
+            if (cgSplit != null && cgSplit.getChildCount() > idx) ((Chip) cgSplit.getChildAt(idx)).setChecked(true);
+        }
+
+        new AlertDialog.Builder(this).setView(v)
                 .setPositiveButton(R.string.use, (d, w) -> {
-                    // Apply
                     Chip sc = null;
-                    for (int i=0;i<cgCrop.getChildCount();i++) {
+                    if (cgCrop != null) for (int i = 0; i < cgCrop.getChildCount(); i++) {
                         Chip c = (Chip) cgCrop.getChildAt(i);
-                        if (c.isChecked()) { sc=c; break; }
+                        if (c.isChecked()) { sc = c; break; }
                     }
                     if (sc != null) {
                         String t = sc.getText().toString();
@@ -630,9 +705,9 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         else if ("Both T&B".equals(t)) p.overrideCrop = StudioConfig.CropGravity.BOTH_TOP_BOTTOM;
                     }
                     Chip sf = null;
-                    for (int i=0;i<cgFit.getChildCount();i++) {
+                    if (cgFit != null) for (int i = 0; i < cgFit.getChildCount(); i++) {
                         Chip c = (Chip) cgFit.getChildAt(i);
-                        if (c.isChecked()) { sf=c; break; }
+                        if (c.isChecked()) { sf = c; break; }
                     }
                     if (sf != null) {
                         String t = sf.getText().toString();
@@ -642,9 +717,9 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         else if ("Letterbox".equals(t)) p.overrideFit = StudioConfig.FitMode.LETTERBOX;
                     }
                     Chip ss = null;
-                    for (int i=0;i<cgSplit.getChildCount();i++) {
+                    if (cgSplit != null) for (int i = 0; i < cgSplit.getChildCount(); i++) {
                         Chip c = (Chip) cgSplit.getChildAt(i);
-                        if (c.isChecked()) { ss=c; break; }
+                        if (c.isChecked()) { ss = c; break; }
                     }
                     if (ss != null) {
                         String t = ss.getText().toString();
@@ -653,28 +728,32 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         else if ("V 2".equals(t)) p.overrideSplit = StudioConfig.SplitMode.VERTICAL_2;
                         else if ("H 2".equals(t)) p.overrideSplit = StudioConfig.SplitMode.HORIZONTAL_2;
                     }
-                    if (adapter != null) adapter.notifyItemChanged(pos);
-                    refreshAll();
+                    pagerAdapter.notifyItemChanged(pos);
+                    thumbsAdapter.notifyItemChanged(pos);
+                    refreshCurrentOnly();
                 })
                 .setNegativeButton(R.string.cancel, null)
-                .create();
+                .create()
+                .show();
 
-        btnDiscard.setOnClickListener(x -> {
+        if (btnDiscard != null) btnDiscard.setOnClickListener(x -> {
             p.discarded = !p.discarded;
-            if (adapter != null) adapter.notifyItemChanged(pos);
+            pagerAdapter.notifyItemChanged(pos);
+            thumbsAdapter.notifyItemChanged(pos);
+            updatePagerOverlay(currentPos);
             updateCounts();
         });
-        btnClear.setOnClickListener(x -> {
+        if (btnClear != null) btnClear.setOnClickListener(x -> {
             p.clearOverrides();
-            if (adapter != null) adapter.notifyItemChanged(pos);
+            pagerAdapter.notifyItemChanged(pos);
+            thumbsAdapter.notifyItemChanged(pos);
+            refreshCurrentOnly();
             Toast.makeText(this, "Cleared", Toast.LENGTH_SHORT).show();
         });
-
-        dlg.show();
     }
 
     private void export() {
-        String outPath = etOutput.getText().toString().trim();
+        String outPath = etOutput != null ? etOutput.getText().toString().trim() : "";
         if (outPath.isEmpty()) {
             Toast.makeText(this, R.string.error_empty_value, Toast.LENGTH_SHORT).show();
             return;
@@ -685,7 +764,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             return;
         }
         config.outputFolder = outDir;
-        if (!switchKeepOriginal.isChecked()) {
+        if (switchKeepOriginal != null && !switchKeepOriginal.isChecked()) {
             try {
                 config.targetWidth = Integer.parseInt(etTargetW.getText().toString().trim());
                 config.targetHeight = Integer.parseInt(etTargetH.getText().toString().trim());
@@ -694,23 +773,21 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                 return;
             }
         }
-        // Filter non-discarded
         List<StudioPhoto> toExport = new ArrayList<>();
         for (StudioPhoto p : photos) if (!p.discarded) toExport.add(p);
         if (toExport.isEmpty()) {
             Toast.makeText(this, "No photos to export (all discarded)", Toast.LENGTH_SHORT).show();
             return;
         }
-        tvStatus.setText(R.string.studio_exporting);
-        findViewById(R.id.btnExport).setEnabled(false);
+        if (tvStudioStatus != null) tvStudioStatus.setText(R.string.studio_exporting);
+        View btnExport = findViewById(R.id.btnExport);
+        if (btnExport != null) btnExport.setEnabled(false);
 
-        executor.execute(() -> {
+        bgExecutor.execute(() -> {
             int exported = 0, splits = 0, discarded = photos.size() - toExport.size();
             List<String> scanned = new ArrayList<>();
             for (StudioPhoto p : toExport) {
                 StudioConfig eff = p.effectiveConfig(config);
-                // Respect mixed resolutions: if allowMixed false, keepOriginal is false and target is forced – already handled
-                // If allowMixed true, keepOriginal true will keep varied, but if targetRatio is set we still crop to ratio individually
                 List<File> outs = ImageProcessor.processAndSave(p.file, outDir, eff, exported);
                 for (File f : outs) scanned.add(f.getAbsolutePath());
                 exported++;
@@ -720,14 +797,91 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             int fExported = exported, fSplits = splits, fDiscarded = discarded;
             runOnUiThread(() -> {
                 String msg = getString(R.string.studio_exported, fExported, fSplits, fDiscarded);
-                tvStatus.setText(msg);
+                if (tvStudioStatus != null) tvStudioStatus.setText(msg);
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
-                findViewById(R.id.btnExport).setEnabled(true);
+                View be = findViewById(R.id.btnExport);
+                if (be != null) be.setEnabled(true);
             });
         });
     }
 
-    // Simple split preview adapter that just shows the same image twice (placeholder)
+    class StudioPagerAdapter extends RecyclerView.Adapter<StudioPagerAdapter.VH> {
+        @Override public VH onCreateViewHolder(ViewGroup parent, int viewType) {
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_studio_pager, parent, false);
+            return new VH(v);
+        }
+        @Override public void onBindViewHolder(VH h, int pos) {
+            StudioPhoto p = photos.get(pos);
+            Glide.with(h.image.getContext()).load(p.file).centerCrop().into(h.image);
+            h.image.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
+            h.image.setOnTouchListener(new View.OnTouchListener() {
+                @Override public boolean onTouch(View v, MotionEvent event) { return false; }
+            });
+            if (p.width == 0) {
+                dimExecutor.execute(() -> {
+                    try {
+                        ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
+                        p.setDimensions(d.width, d.height);
+                        runOnUiThread(() -> {
+                            if (pos == currentPos) updatePagerOverlay(currentPos);
+                            thumbsAdapter.notifyItemChanged(pos);
+                        });
+                    } catch (Exception ignored) {}
+                });
+            }
+        }
+        @Override public int getItemCount() { return photos.size(); }
+        class VH extends RecyclerView.ViewHolder {
+            ImageView image;
+            VH(View v) { super(v); image = v.findViewById(R.id.ivPagerPhoto); }
+        }
+    }
+
+    class ThumbsAdapter extends RecyclerView.Adapter<ThumbsAdapter.VH> {
+        private int selected = 0;
+        void setSelected(int pos) {
+            int old = selected;
+            selected = pos;
+            if (old >= 0) notifyItemChanged(old);
+            notifyItemChanged(pos);
+        }
+        @Override public VH onCreateViewHolder(ViewGroup parent, int viewType) {
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_studio_thumb, parent, false);
+            return new VH(v);
+        }
+        @Override public void onBindViewHolder(VH h, int pos) {
+            StudioPhoto p = photos.get(pos);
+            Glide.with(h.image.getContext()).load(p.file).centerCrop().into(h.image);
+            boolean isSel = pos == selected;
+            h.selectedOverlay.setVisibility(isSel ? View.VISIBLE : View.GONE);
+            View card = (View) h.itemView;
+            if (card instanceof com.google.android.material.card.MaterialCardView) {
+                ((com.google.android.material.card.MaterialCardView) card).setStrokeWidth(isSel ? 3 : 0);
+                ((com.google.android.material.card.MaterialCardView) card).setStrokeColor(getColor(R.color.light_primary));
+            }
+            h.badge.setVisibility(p.isBase ? View.VISIBLE : View.GONE);
+            h.discardBar.setVisibility(p.discarded ? View.VISIBLE : View.GONE);
+            h.image.setAlpha(p.discarded ? 0.5f : 1f);
+            h.itemView.setOnClickListener(v -> {
+                if (vpStudio != null) vpStudio.setCurrentItem(pos, true);
+            });
+            h.itemView.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
+        }
+        @Override public int getItemCount() { return photos.size(); }
+        class VH extends RecyclerView.ViewHolder {
+            ImageView image;
+            View selectedOverlay, discardBar;
+            TextView badge;
+            VH(View v) {
+                super(v);
+                image = v.findViewById(R.id.ivThumb);
+                selectedOverlay = v.findViewById(R.id.vThumbSelected);
+                badge = v.findViewById(R.id.tvThumbBadge);
+                discardBar = v.findViewById(R.id.vThumbDiscard);
+            }
+        }
+    }
+
     static class SplitPreviewAdapter extends RecyclerView.Adapter<SplitPreviewAdapter.VH> {
         List<File> files;
         SplitPreviewAdapter(List<File> f) { files = f; }
@@ -737,7 +891,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             return new VH(v);
         }
         @Override public void onBindViewHolder(VH h, int pos) {
-            File f = files.get(pos % files.size());
+            File f = files.get(pos % Math.max(1, files.size()));
             Glide.with(h.image.getContext()).load(f).centerCrop().into(h.image);
         }
         @Override public int getItemCount() { return Math.min(files.size(), 2); }
@@ -747,27 +901,10 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
     }
 
-    static class PreviewHalvesAdapter extends RecyclerView.Adapter<PreviewHalvesAdapter.VH> {
-        List<Bitmap> bitmaps;
-        PreviewHalvesAdapter(List<Bitmap> b) { bitmaps = b; }
-        @Override public VH onCreateViewHolder(ViewGroup p, int t) {
-            View v = LayoutInflater.from(p.getContext()).inflate(R.layout.item_split_preview, p, false);
-            return new VH(v);
-        }
-        @Override public void onBindViewHolder(VH h, int pos) {
-            h.image.setImageBitmap(bitmaps.get(pos));
-        }
-        @Override public int getItemCount() { return bitmaps.size(); }
-        static class VH extends RecyclerView.ViewHolder {
-            ImageView image;
-            VH(View v) { super(v); image = v.findViewById(R.id.ivSplit); }
-        }
-    }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        executor.shutdown();
-        bgDimExecutor.shutdown();
+        bgExecutor.shutdown();
+        dimExecutor.shutdown();
     }
 }

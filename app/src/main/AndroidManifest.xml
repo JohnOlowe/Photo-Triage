@@ -18,6 +18,8 @@
 
   <activity android:name=".ToolsActivity" android:exported="false" />
 
+  <activity android:name=".ResolutionStudioActivity" android:exported="false" />
+
   </application>
 
 </manifest>

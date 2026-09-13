@@ -53,6 +53,9 @@ public class ToolsActivity extends AppCompatActivity {
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnOrganizeTool).setOnClickListener(v -> showOrganizeDialog());
         findViewById(R.id.btnScanTool).setOnClickListener(v -> showScanDialog());
+        View btnStudio = findViewById(R.id.btnStudio);
+        if (btnStudio != null) btnStudio.setOnClickListener(v ->
+                startActivity(new android.content.Intent(ToolsActivity.this, ResolutionStudioActivity.class)));
     }
 
     // ---------------------------------------------------------------------------------------------

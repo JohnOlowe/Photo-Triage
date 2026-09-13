@@ -131,6 +131,12 @@ public class MainActivity extends AppCompatActivity {
         View btnTools = findViewById(R.id.btnTools);
         if (btnTools != null) btnTools.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, ToolsActivity.class)));
+        View btnStudio = findViewById(R.id.btnStudio);
+        if (btnStudio != null) btnStudio.setOnClickListener(v -> {
+            Intent i = new Intent(MainActivity.this, ResolutionStudioActivity.class);
+            i.putExtra("folder", currentSourceFolder);
+            startActivity(i);
+        });
 
         currentSourceFolder = settings.getInboxFolder().getAbsolutePath();
         updateSourceButton();

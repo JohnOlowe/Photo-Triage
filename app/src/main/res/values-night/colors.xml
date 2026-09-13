@@ -1,2 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <!-- Dark theme — inverted, easy on eyes for photo triage -->
+    <color name="dark_primary">#4FD8CF</color>
+    <color name="dark_onPrimary">#003735</color>
+    <color name="dark_primaryContainer">#00504A</color>
+    <color name="dark_onPrimaryContainer">#6FF7D4</color>
+
+    <color name="dark_secondary">#B0CCCA</color>
+    <color name="dark_onSecondary">#1C3532</color>
+    <color name="dark_secondaryContainer">#334B48</color>
+    <color name="dark_onSecondaryContainer">#CCE8E2</color>
+
+    <color name="dark_tertiary">#ACCBE8</color>
+    <color name="dark_onTertiary">#133348</color>
+
+    <color name="dark_error">#FFB4AB</color>
+    <color name="dark_onError">#690005</color>
+    <color name="dark_errorContainer">#93000A</color>
+
+    <color name="dark_background">#191C1C</color>
+    <color name="dark_onBackground">#E0E3E2</color>
+    <color name="dark_surface">#191C1C</color>
+    <color name="dark_onSurface">#E0E3E2</color>
+    <color name="dark_surfaceVariant">#3F4948</color>
+    <color name="dark_onSurfaceVariant">#BEC9C6</color>
+    <color name="dark_outline">#899391</color>
+    <color name="dark_outlineVariant">#3F4948</color>
+    <color name="dark_surfaceContainer">#1E2121</color>
+    <color name="dark_surfaceContainerHigh">#282B2B</color>
+    <color name="dark_surfaceContainerHighest">#333636</color>
+
+    <color name="dark_brand_accent">#FFB86E</color>
+    <color name="dark_brand_accent_container">#5A3200</color>
+</resources>

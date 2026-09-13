@@ -4,18 +4,18 @@
 
     <!-- Main screen -->
     <string name="source_default">Source</string>
-    <string name="source_button_format">Source: %1$s</string>
+    <string name="source_button_format">%1$s</string>
     <string name="reload_deck">Reload</string>
     <string name="settings">Settings</string>
     <string name="tools">Tools</string>
-    <string name="add_folder">+ Add Folder</string>
-    <string name="skip_keep">Skip (Keep)</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="skip_keep">Skip</string>
     <string name="select_source_title">Select Source Folder</string>
     <string name="custom_source_title">Custom Source Folder</string>
-    <string name="custom_path_option">Custom path…</string>
+    <string name="custom_path_option">Browse or paste path…</string>
     <string name="use">Use</string>
     <string name="remove_folder_title">Remove Folder?</string>
-    <string name="remove_folder_message">Hide \'%1$s\' from this list?</string>
+    <string name="remove_folder_message">Hide ‘%1$s’ from this list? Photos already sorted there stay on disk.</string>
     <string name="remove">Remove</string>
     <string name="cancel">Cancel</string>
     <string name="add">Add</string>
@@ -26,6 +26,9 @@
     <string name="permission_denied">Permission denied.</string>
     <string name="grant_all_files_access">Please grant All Files Access and press back</string>
     <string name="file_operation_failed">Could not move or copy photo.</string>
+    <string name="hint_tap_to_expand">Tap to fill • Tap again to fit</string>
+    <string name="no_photos">No photos</string>
+    <string name="empty_hint">This folder is empty or missing. Change source or reload.</string>
 
     <!-- Settings screen -->
     <string name="back">Back</string>
@@ -35,8 +38,8 @@
     <string name="pref_inbox_folder">Inbox folder name</string>
     <string name="pref_extensions">Image extensions (comma separated)</string>
     <string name="sort_order_title">Sort order</string>
-    <string name="sort_name_asc">Name (A to Z)</string>
-    <string name="sort_name_desc">Name (Z to A)</string>
+    <string name="sort_name_asc">Name (A → Z)</string>
+    <string name="sort_name_desc">Name (Z → A)</string>
     <string name="sort_date_asc">Oldest first</string>
     <string name="sort_date_desc">Newest first</string>
     <string name="file_operation_title">File operation</string>
@@ -48,9 +51,16 @@
     <string name="label_index">Position number</string>
     <string name="reset_defaults">Reset to defaults</string>
     <string name="error_empty_value">Value cannot be empty.</string>
-    <string name="pref_sort_order_value">Sort order: %1$s</string>
+    <string name="pref_sort_order_value">Sort: %1$s</string>
     <string name="pref_file_operation_value">Operation: %1$s</string>
     <string name="pref_label_mode_value">Label: %1$s</string>
+    <string name="browse">Browse</string>
+    <string name="paste">Paste</string>
+    <string name="copy_path">Copy path</string>
+    <string name="path_pasted">Path pasted</string>
+    <string name="no_clipboard">Clipboard is empty</string>
+    <string name="invalid_path">Invalid path</string>
+    <string name="folder_selected">Selected: %1$s</string>
 
     <!-- Tools screen -->
     <string name="tools_title">Tools</string>
@@ -77,4 +87,8 @@
     <string name="copy_instead">Copy instead of move</string>
     <string name="invalid_regex">Invalid regular expression: %1$s</string>
     <string name="errors_prefix">%1$d problem(s) encountered.</string>
+    <string name="select_folder">Select folder</string>
+    <string name="create_folder">Create</string>
+    <string name="up">Up</string>
+    <string name="go">Go</string>
 </resources>

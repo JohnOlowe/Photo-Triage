@@ -55,14 +55,12 @@ dependencies {
   implementation(libs.androidx.appcompat)
   implementation(libs.material)
   implementation(libs.androidx.constraintlayout)
+  implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
   implementation("com.github.yuyakaido:CardStackView:v2.3.4")
 
     // Glide for efficient image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
-
-    // Recommended: Material components for standardizing your action buttons
-    implementation("com.google.android.material:material:1.11.0")
 
     // JVM unit tests for the pure-logic helpers (no device needed)
     testImplementation("junit:junit:4.13.2")

@@ -1,120 +1,316 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212">
+    android:background="?attr/colorSurface">
 
-    <!-- Top Bar for Controls -->
-    <LinearLayout
-        android:id="@+id/topBar"
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingHorizontal="16dp"
-        app:layout_constraintTop_toTopOf="parent">
+        android:background="?attr/colorSurface"
+        app:elevation="0dp">
 
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="@string/app_name"
+            app:titleCentered="false"
+            app:titleTextColor="?attr/colorOnSurface"
+            style="@style/Widget.Material3.Toolbar.Surface"
+            app:menu="@menu/menu_main" />
+
+        <!-- Source bar -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:orientation="horizontal">
+            android:layout_marginHorizontal="16dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="12dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorOutlineVariant"
+            app:strokeWidth="1dp"
+            app:cardBackgroundColor="?attr/colorSurfaceContainer">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSettings"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/settings" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="8dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnTools"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/tools" />
-        </LinearLayout>
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/btnChangeSource"
+                    style="@style/Widget.Material3.Chip.Assist"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="middle"
+                    android:singleLine="true"
+                    app:chipIcon="@drawable/ic_folder_open"
+                    app:chipIconSize="18dp"
+                    android:text="@string/source_default"
+                    app:chipStrokeColor="?attr/colorOutlineVariant"
+                    tools:text="Source: Ordered Photos" />
 
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:orientation="horizontal">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnReload"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    app:icon="@drawable/ic_refresh"
+                    app:iconSize="18dp"
+                    android:text="@string/reload_deck"
+                    android:textSize="12sp"
+                    app:cornerRadius="12dp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnChangeSource"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/source_default" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSettings"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    app:icon="@drawable/ic_settings"
+                    app:iconSize="22dp"
+                    app:iconPadding="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:cornerRadius="12dp"
+                    android:contentDescription="@string/settings" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnReload"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/reload_deck" />
-        </LinearLayout>
-    </LinearLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTools"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    app:icon="@drawable/ic_tools"
+                    app:iconSize="20dp"
+                    app:iconPadding="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:cornerRadius="12dp"
+                    android:contentDescription="@string/tools" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-    <!-- The Swipeable Card Stack -->
-    <com.yuyakaido.android.cardstackview.CardStackView
-        android:id="@+id/cardStackView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_margin="16dp"
-        app:layout_constraintTop_toBottomOf="@+id/topBar"
-        app:layout_constraintBottom_toTopOf="@+id/buttonContainer"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Action Buttons Container -->
-    <LinearLayout
-        android:id="@+id/buttonContainer"
+    <!-- Main content -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior"
+        android:fillViewport="true">
 
-        <!-- Horizontal scrollable list for dynamic folder buttons -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerCategories"
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+            android:layout_height="match_parent"
+            android:paddingBottom="8dp">
 
-        <!-- Controls Row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
+            <!-- Card stack -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/cardContainer"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_marginHorizontal="12dp"
+                android:layout_marginTop="8dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toTopOf="@+id/categoriesCard"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintHeight_default="percent"
+                app:layout_constraintHeight_percent="0.58">
 
-            <!-- Button to create a new folder -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAddCategory"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                <com.yuyakaido.android.cardstackview.CardStackView
+                    android:id="@+id/cardStackView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:padding="4dp" />
+
+                <!-- Empty state -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/emptyState"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"
+                    app:cardCornerRadius="24dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeWidth="1dp"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                    tools:visibility="visible">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="32dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="No photos"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            android:textColor="?attr/colorOnSurface" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:text="This folder is empty or missing.\nTry changing the source or reloading."
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="14sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnEmptyReload"
+                            style="@style/Widget.Material3.Button.TonalButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:text="@string/reload_deck"
+                            app:icon="@drawable/ic_refresh" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Progress hint -->
+                <TextView
+                    android:id="@+id/tvProgress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_hint_pill"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="6dp"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    tools:text="3 / 42"
+                    tools:visibility="visible" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Categories -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/categoriesCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="@string/add_folder" />
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="1dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="0.7dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                app:layout_constraintTop_toBottomOf="@id/cardContainer"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
 
-            <!-- Skip Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSkip"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Destination folders"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08"
+                            android:textAllCaps="true" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="long press to remove"
+                            android:textColor="?attr/colorOutline"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recyclerCategories"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:clipToPadding="false"
+                        android:orientation="horizontal"
+                        android:paddingVertical="2dp"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+                    <TextView
+                        android:id="@+id/tvNoCategories"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="No folders yet — add one below"
+                        android:textColor="?attr/colorOutline"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        tools:visibility="gone" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Controls -->
+            <LinearLayout
+                android:id="@+id/buttonContainer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:textColor="#FF5252"
-                android:text="@string/skip_keep" />
-        </LinearLayout>
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="16dp"
+                app:layout_constraintTop_toBottomOf="@id/categoriesCard"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
-    </LinearLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddCategory"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1.2"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/add_folder"
+                    android:textSize="13sp"
+                    app:cornerRadius="16dp"
+                    app:icon="@drawable/ic_add"
+                    app:iconSize="20dp" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSkip"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:text="@string/skip_keep"
+                    android:textColor="?attr/colorError"
+                    app:strokeColor="?attr/colorError"
+                    app:cornerRadius="16dp"
+                    app:icon="@drawable/ic_skip"
+                    app:iconTint="?attr/colorError"
+                    app:iconSize="18dp" />
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

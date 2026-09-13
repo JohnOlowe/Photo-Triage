@@ -1,8 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.button.MaterialButton 
+<com.google.android.material.card.MaterialCardView 
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/btnDynamicCategory"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
-    android:layout_height="64dp"
-    android:layout_marginEnd="8dp"
-    android:text="Category Name" />
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="10dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:strokeWidth="0.7dp"
+    app:cardBackgroundColor="?attr/colorSecondaryContainer">
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnDynamicCategory"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:minWidth="0dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        app:cornerRadius="18dp"
+        android:text="Category"
+        android:textSize="13sp"
+        app:icon="@drawable/ic_folder"
+        app:iconSize="16dp"
+        app:iconPadding="6dp" />
+
+</com.google.android.material.card.MaterialCardView>

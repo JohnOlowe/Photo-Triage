@@ -1,8 +1,23 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-  <!-- Base application theme. -->
+  <!-- Dark theme overrides -->
   <style name="Base.AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
-    <!-- Customize your theme here. -->
-    <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <item name="colorPrimary">@color/dark_primary</item>
+    <item name="colorOnPrimary">@color/dark_onPrimary</item>
+    <item name="colorPrimaryContainer">@color/dark_primaryContainer</item>
+    <item name="colorOnPrimaryContainer">@color/dark_onPrimaryContainer</item>
+    <item name="colorSecondary">@color/dark_secondary</item>
+    <item name="colorOnSecondary">@color/dark_onSecondary</item>
+    <item name="colorSecondaryContainer">@color/dark_secondaryContainer</item>
+    <item name="colorSurface">@color/dark_surface</item>
+    <item name="colorOnSurface">@color/dark_onSurface</item>
+    <item name="colorSurfaceVariant">@color/dark_surfaceVariant</item>
+    <item name="colorOnSurfaceVariant">@color/dark_onSurfaceVariant</item>
+    <item name="colorOutline">@color/dark_outline</item>
+    <item name="colorOutlineVariant">@color/dark_outlineVariant</item>
+    <item name="android:colorBackground">@color/dark_background</item>
+    <item name="colorError">@color/dark_error</item>
+    <item name="colorSurfaceContainer">@color/dark_surfaceContainer</item>
+    <item name="colorSurfaceContainerHigh">@color/dark_surfaceContainerHigh</item>
   </style>
 
   <style name="AppTheme" parent="Base.AppTheme" />

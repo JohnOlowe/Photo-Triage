@@ -1,2 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <!-- PhotoTriage palette — warm, professional, photo-centric -->
+    <!-- Seed: Teal / Amber -->
+    <color name="seed">#006A60</color>
+
+    <!-- Light theme -->
+    <color name="light_primary">#006A60</color>
+    <color name="light_onPrimary">#FFFFFF</color>
+    <color name="light_primaryContainer">#6FF7D4</color>
+    <color name="light_onPrimaryContainer">#00201C</color>
+
+    <color name="light_secondary">#4A635F</color>
+    <color name="light_onSecondary">#FFFFFF</color>
+    <color name="light_secondaryContainer">#CCE8E2</color>
+    <color name="light_onSecondaryContainer">#05201C</color>
+
+    <color name="light_tertiary">#456179</color>
+    <color name="light_onTertiary">#FFFFFF</color>
+
+    <color name="light_error">#BA1A1A</color>
+    <color name="light_onError">#FFFFFF</color>
+    <color name="light_errorContainer">#FFDAD6</color>
+
+    <color name="light_background">#FAFDFB</color>
+    <color name="light_onBackground">#191C1C</color>
+    <color name="light_surface">#FAFDFB</color>
+    <color name="light_onSurface">#191C1C</color>
+    <color name="light_surfaceVariant">#DAE5E3</color>
+    <color name="light_onSurfaceVariant">#3F4948</color>
+    <color name="light_outline">#6F7978</color>
+    <color name="light_outlineVariant">#BEC9C6</color>
+    <color name="light_surfaceContainer">#EDEEEF</color>
+    <color name="light_surfaceContainerHigh">#E6E8E9</color>
+    <color name="light_surfaceContainerHighest">#E0E3E2</color>
+
+    <!-- Brand accent -->
+    <color name="brand_accent">#FF8A00</color>
+    <color name="brand_accent_container">#FFDCC2</color>
+</resources>

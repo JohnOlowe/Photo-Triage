@@ -1,11 +1,13 @@
 package damjay.photo.triage;
 
 import android.os.Bundle;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import com.google.android.material.button.MaterialButton;
 
@@ -14,6 +16,7 @@ import java.util.Set;
 /**
  * Lets the user change everything that used to be hard-coded:
  * root folder, inbox folder, image extensions, sort order, move/copy and photo labels.
+ * Now with integrated browse + paste controls for every path field.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -22,6 +25,10 @@ public class SettingsActivity extends AppCompatActivity {
     private MaterialButton btnFileOperation;
     private MaterialButton btnLabelMode;
 
+    private EditText etRootFolder;
+    private EditText etInboxFolder;
+    private EditText etExtensions;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -29,9 +36,16 @@ public class SettingsActivity extends AppCompatActivity {
 
         settings = new SettingsManager(this);
 
-        final EditText etRootFolder = findViewById(R.id.etRootFolder);
-        final EditText etInboxFolder = findViewById(R.id.etInboxFolder);
-        final EditText etExtensions = findViewById(R.id.etExtensions);
+        Toolbar toolbar = findViewById(R.id.toolbarSettings);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            toolbar.setNavigationOnClickListener(v -> finish());
+        }
+
+        etRootFolder = findViewById(R.id.etRootFolder);
+        etInboxFolder = findViewById(R.id.etInboxFolder);
+        etExtensions = findViewById(R.id.etExtensions);
         btnSortOrder = findViewById(R.id.btnSortOrder);
         btnFileOperation = findViewById(R.id.btnFileOperation);
         btnLabelMode = findViewById(R.id.btnLabelMode);
@@ -76,13 +90,68 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
+        // Browse + Paste integration — creative merge of picker and clipboard
+        FolderPickerDialog.attach(this, etRootFolder, findViewById(R.id.btnBrowseRoot), findViewById(R.id.btnPasteRoot));
+        FolderPickerDialog.attach(this, etInboxFolder, findViewById(R.id.btnBrowseInbox), findViewById(R.id.btnPasteInbox));
+        // Also save on browse selection immediately — override attach's browse to persist
+        if (findViewById(R.id.btnBrowseRoot) != null) {
+            findViewById(R.id.btnBrowseRoot).setOnClickListener(v -> FolderPickerDialog.show(this, etRootFolder.getText().toString(), path -> {
+                etRootFolder.setText(path);
+                settings.setRootFolder(path);
+                Toast.makeText(this, getString(R.string.folder_selected, path), Toast.LENGTH_SHORT).show();
+            }));
+        }
+        if (findViewById(R.id.btnBrowseInbox) != null) {
+            findViewById(R.id.btnBrowseInbox).setOnClickListener(v -> FolderPickerDialog.show(this, etInboxFolder.getText().toString(), path -> {
+                String name = extractInboxName(path);
+                etInboxFolder.setText(name);
+                settings.setInboxFolderName(name);
+                Toast.makeText(this, getString(R.string.folder_selected, name), Toast.LENGTH_SHORT).show();
+            }));
+        }
+        // Paste for inbox should also extract folder name if full path pasted
+        View pasteInbox = findViewById(R.id.btnPasteInbox);
+        if (pasteInbox != null) {
+            pasteInbox.setOnClickListener(v -> {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if (cm != null && cm.hasPrimaryClip()) {
+                    android.content.ClipData clip = cm.getPrimaryClip();
+                    if (clip != null && clip.getItemCount() > 0) {
+                        CharSequence t = clip.getItemAt(0).coerceToText(this);
+                        if (t != null) {
+                            String pasted = t.toString().trim();
+                            String name = pasted.contains("/") ? extractInboxName(pasted) : pasted;
+                            etInboxFolder.setText(name);
+                            if (!name.isEmpty()) settings.setInboxFolderName(name);
+                            Toast.makeText(this, R.string.path_pasted, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                } else {
+                    Toast.makeText(this, R.string.no_clipboard, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
         btnSortOrder.setOnClickListener(v -> showSortOrderDialog());
         btnFileOperation.setOnClickListener(v -> showFileOperationDialog());
         btnLabelMode.setOnClickListener(v -> showLabelModeDialog());
         findViewById(R.id.btnReset).setOnClickListener(v -> resetToDefaults());
-        findViewById(R.id.btnBack).setOnClickListener(v -> finish());
+        View back = findViewById(R.id.btnBack);
+        if (back != null) back.setOnClickListener(v -> finish());
 
         refreshChoiceButtons();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Persist current values even if focus didn't change
+        String root = etRootFolder.getText().toString().trim();
+        if (!root.isEmpty()) settings.setRootFolder(root);
+        String inbox = etInboxFolder.getText().toString().trim();
+        if (!inbox.isEmpty()) settings.setInboxFolderName(inbox);
+        Set<String> parsed = SettingsManager.parseExtensions(etExtensions.getText().toString());
+        if (!parsed.isEmpty()) settings.setImageExtensions(parsed);
     }
 
     private void refreshChoiceButtons() {
@@ -183,6 +252,23 @@ public class SettingsActivity extends AppCompatActivity {
     private void resetToDefaults() {
         settings.resetAll();
         recreate();
+    }
+
+    private String extractInboxName(String path) {
+        if (path == null) return "";
+        String name = path.trim();
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0 && slash < name.length() - 1) {
+            String root = settings.getRootFolder();
+            if (name.startsWith(root)) {
+                name = name.substring(root.length());
+                if (name.startsWith("/")) name = name.substring(1);
+                if (name.contains("/")) name = name.substring(0, name.indexOf('/'));
+            } else {
+                name = name.substring(slash + 1);
+            }
+        }
+        return name;
     }
 
     private void toast(int resId) {

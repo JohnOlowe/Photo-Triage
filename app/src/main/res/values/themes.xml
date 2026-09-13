@@ -1,9 +1,38 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-  <!-- Base application theme. -->
+  <!-- Light theme -->
   <style name="Base.AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
-    <!-- Customize your theme here. -->
-    <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <item name="colorPrimary">@color/light_primary</item>
+    <item name="colorOnPrimary">@color/light_onPrimary</item>
+    <item name="colorPrimaryContainer">@color/light_primaryContainer</item>
+    <item name="colorOnPrimaryContainer">@color/light_onPrimaryContainer</item>
+    <item name="colorSecondary">@color/light_secondary</item>
+    <item name="colorOnSecondary">@color/light_onSecondary</item>
+    <item name="colorSecondaryContainer">@color/light_secondaryContainer</item>
+    <item name="colorSurface">@color/light_surface</item>
+    <item name="colorOnSurface">@color/light_onSurface</item>
+    <item name="colorSurfaceVariant">@color/light_surfaceVariant</item>
+    <item name="colorOnSurfaceVariant">@color/light_onSurfaceVariant</item>
+    <item name="colorOutline">@color/light_outline</item>
+    <item name="colorOutlineVariant">@color/light_outlineVariant</item>
+    <item name="android:colorBackground">@color/light_background</item>
+    <item name="colorError">@color/light_error</item>
+    <item name="colorSurfaceContainer">@color/light_surfaceContainer</item>
+    <item name="colorSurfaceContainerHigh">@color/light_surfaceContainerHigh</item>
+    <item name="elevationLevel2">@color/light_surfaceContainer</item>
   </style>
 
   <style name="AppTheme" parent="Base.AppTheme" />
+
+  <!-- Card styles -->
+  <style name="PhotoTriage.Card" parent="Widget.Material3.CardView.Elevated">
+    <item name="cardCornerRadius">20dp</item>
+    <item name="cardElevation">2dp</item>
+    <item name="strokeColor">?attr/colorOutlineVariant</item>
+    <item name="strokeWidth">0.5dp</item>
+  </style>
+
+  <style name="PhotoTriage.Chip" parent="Widget.Material3.Button.TonalButton">
+    <item name="android:textSize">13sp</item>
+    <item name="android:letterSpacing">0.02</item>
+  </style>
 </resources>

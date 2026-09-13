@@ -38,13 +38,24 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
     public void onBindViewHolder(@NonNull CategoryViewHolder holder, int position) {
         String category = categories.get(position);
         holder.button.setText(category);
-        
-        // Tap to move photo
-        holder.button.setOnClickListener(v -> listener.onCategoryClick(category));
-        
-        // Long press to delete category
+
+        // Tap to move photo — use current binding position at click time to avoid stale positions
+        holder.button.setOnClickListener(v -> {
+            int pos = holder.getBindingAdapterPosition();
+            if (pos != RecyclerView.NO_POSITION && pos < categories.size()) {
+                listener.onCategoryClick(categories.get(pos));
+            } else {
+                listener.onCategoryClick(category);
+            }
+        });
+
+        // Long press to delete category — resolve position at interaction time
         holder.button.setOnLongClickListener(v -> {
-            listener.onCategoryLongClick(category, position);
+            int pos = holder.getBindingAdapterPosition();
+            if (pos == RecyclerView.NO_POSITION) return true;
+            if (pos < 0 || pos >= categories.size()) return true;
+            String name = categories.get(pos);
+            listener.onCategoryLongClick(name, pos);
             return true;
         });
     }

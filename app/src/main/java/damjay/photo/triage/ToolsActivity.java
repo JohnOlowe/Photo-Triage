@@ -11,6 +11,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ import java.util.regex.PatternSyntaxException;
  * Home for the maintenance tools that used to be hard-coded, one-off methods on
  * {@link MainActivity}: "reorganize photos" (the old syncGitMessToHighRes) and
  * "scan folder into gallery" (the old fixGitPhotoMess). Both are now fully
- * configurable.
+ * configurable with integrated browse+paste.
  */
 @SuppressWarnings("deprecation")
 public class ToolsActivity extends AppCompatActivity {
@@ -42,6 +43,13 @@ public class ToolsActivity extends AppCompatActivity {
         settings = new SettingsManager(this);
         statusText = findViewById(R.id.tvToolStatus);
 
+        Toolbar toolbar = findViewById(R.id.toolbarTools);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            toolbar.setNavigationOnClickListener(v -> finish());
+        }
+
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         findViewById(R.id.btnOrganizeTool).setOnClickListener(v -> showOrganizeDialog());
         findViewById(R.id.btnScanTool).setOnClickListener(v -> showScanDialog());
@@ -56,9 +64,13 @@ public class ToolsActivity extends AppCompatActivity {
         final EditText etFolder = form.findViewById(R.id.etScanFolder);
         final CheckBox cbRecursive = form.findViewById(R.id.cbScanRecursive);
         final EditText etExtensions = form.findViewById(R.id.etScanExtensions);
+        View btnBrowse = form.findViewById(R.id.btnBrowseScan);
+        View btnPaste = form.findViewById(R.id.btnPasteScan);
 
         etFolder.setText(settings.getRootFolder());
         etExtensions.setText(SettingsManager.joinExtensions(settings.getImageExtensions()));
+
+        FolderPickerDialog.attach(this, etFolder, btnBrowse, btnPaste);
 
         new AlertDialog.Builder(this)
                 .setTitle(R.string.tool_scan_title)
@@ -110,6 +122,31 @@ public class ToolsActivity extends AppCompatActivity {
         final EditText etFilePrefix = form.findViewById(R.id.etFilePrefix);
         final CheckBox cbDeleteExisting = form.findViewById(R.id.cbDeleteExisting);
         final CheckBox cbCopyInstead = form.findViewById(R.id.cbCopyInstead);
+
+        // Browse + Paste for folder fields
+        FolderPickerDialog.attach(this, etSourceDir, form.findViewById(R.id.btnBrowseSourceDir), form.findViewById(R.id.btnPasteSourceDir));
+        FolderPickerDialog.attach(this, etDestDir, form.findViewById(R.id.btnBrowseDestDir), form.findViewById(R.id.btnPasteDestDir));
+        // Inbox is just a name, but allow paste
+        View pasteInbox = form.findViewById(R.id.btnPasteInboxDir);
+        if (pasteInbox != null) {
+            pasteInbox.setOnClickListener(v -> {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if (cm != null && cm.hasPrimaryClip()) {
+                    android.content.ClipData clip = cm.getPrimaryClip();
+                    if (clip != null && clip.getItemCount() > 0) {
+                        CharSequence t = clip.getItemAt(0).coerceToText(this);
+                        if (t != null) {
+                            String p = t.toString().trim();
+                            // If full path pasted, extract folder name
+                            int slash = p.lastIndexOf('/');
+                            if (slash >= 0) p = p.substring(slash + 1);
+                            etInboxDir.setText(p);
+                            Toast.makeText(this, R.string.path_pasted, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            });
+        }
 
         etSourceDir.setText(new File(Environment.getExternalStorageDirectory(), "FSFUI-Photos").getAbsolutePath());
         etDestDir.setText(settings.getRootFolder());

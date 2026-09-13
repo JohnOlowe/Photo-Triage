@@ -50,21 +50,61 @@ jobs:
 
       - name: Post diagnostics on failure
         if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            let body = `CI failed for ${context.sha} @ ${context.ref}\n`;
+            try {
+              const log = fs.readFileSync('/tmp/gradle_test.log', 'utf8');
+              // Find interesting section: BUILD FAILED, FAILED, Exception
+              const lines = log.split('\n');
+              const failIdx = lines.findIndex(l => l.includes('BUILD FAILED') || l.includes('FAILED') || l.includes('AssertionFailed'));
+              const snippet = failIdx >= 0 ? lines.slice(Math.max(0, failIdx - 120), failIdx + 80).join('\n') : log.slice(-8000);
+              body += '\n==== gradle_test.log snippet ====\n' + snippet + '\n';
+            } catch(e) { body += '\n(no gradle_test.log: ' + e.message + ')\n'; }
+            try {
+              const buildLog = fs.readFileSync('/tmp/gradle_build.log', 'utf8');
+              body += '\n==== gradle_build.log tail ====\n' + buildLog.slice(-4000) + '\n';
+            } catch(e) {}
+            // junit xml
+            try {
+              const dir = 'app/build/test-results/testDebugUnitTest';
+              if (fs.existsSync(dir)) {
+                for (const f of fs.readdirSync(dir)) {
+                  if (f.endsWith('.xml')) {
+                    const c = fs.readFileSync(path.join(dir, f), 'utf8');
+                    body += `\n==== ${f} ====\n` + c.slice(0, 6000) + '\n';
+                  }
+                }
+              }
+            } catch(e) { body += '\n(junit read error: ' + e.message + ')\n'; }
+            // also html report fragment
+            try {
+              const htmlDir = 'app/build/reports/tests/testDebugUnitTest/classes';
+              if (fs.existsSync(htmlDir)) {
+                for (const f of fs.readdirSync(htmlDir)) {
+                  if (f.endsWith('.html')) {
+                    const c = fs.readFileSync(path.join(htmlDir, f), 'utf8');
+                    // strip tags crudely
+                    const text = c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 4000);
+                    body += `\n==== ${f} text ====\n` + text + '\n';
+                  }
+                }
+              }
+            } catch(e) {}
+            body = body.slice(0, 60000);
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: '```\n' + body + '\n```'
+            });
+            core.setFailed('CI failed — diagnostics posted as commit comment');
+
+      - name: Annotate failure tail
+        if: failure()
         run: |
-          echo "Posting failure diagnostics via commit comment..."
-          LOG=""
-          if [ -f /tmp/gradle_test.log ]; then LOG="${LOG}\n==== gradle_test.log tail ====\n$(tail -n 300 /tmp/gradle_test.log)\n"; fi
-          if [ -f /tmp/gradle_build.log ]; then LOG="${LOG}\n==== gradle_build.log tail ====\n$(tail -n 300 /tmp/gradle_build.log)\n"; fi
-          if [ -f app/build/reports/tests/testDebugUnitTest/classes/damjay.photo.triage.ExampleUnitTest.html ]; then LOG="${LOG}\n==== test report ====\n$(cat app/build/reports/tests/testDebugUnitTest/classes/*.html 2>/dev/null | head -c 4000)\n"; fi
-          # Also collect junit xml
-          for f in app/build/test-results/testDebugUnitTest/*.xml; do
-            [ -f "$f" ] && LOG="${LOG}\n==== $f ====\n$(cat "$f" | head -c 4000)\n"
-          done
-          # Truncate to GH comment limit (65536)
-          BODY=$(printf "CI failed for %s @ %s\n\`\`\`\n%s\n\`\`\`" "${{ github.sha }}" "${{ github.ref }}" "$LOG" | head -c 64000)
-          # Post as commit comment (visible via api.github.com)
-          echo "$BODY" | gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body=- --silent || echo "gh api comment failed"
-          # Also emit ::error annotations (visible via check-runs API)
-          echo "::error::CI failed — see commit comments for logs. Tail: $(tail -n 80 /tmp/gradle_test.log 2>/dev/null | tr '\n' ' ' | head -c 2000)"
+          echo "::error::CI failed — see commit comments for full logs"
+          tail -n 120 /tmp/gradle_test.log 2>/dev/null | head -c 5000 | while IFS= read -r line; do echo "::error::$line"; done || true

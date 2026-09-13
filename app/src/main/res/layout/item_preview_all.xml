@@ -20,12 +20,10 @@
             android:layout_height="wrap_content"
             android:background="?attr/colorSurfaceContainerHigh">
 
-            <ImageView
+            <damjay.photo.triage.ZoomableImageView
                 android:id="@+id/ivPreviewAll"
                 android:layout_width="match_parent"
-                android:layout_height="180dp"
-                android:adjustViewBounds="true"
-                android:scaleType="fitCenter"
+                android:layout_height="220dp"
                 android:background="?attr/colorSurfaceContainerHigh"
                 android:contentDescription="preview"
                 tools:src="@mipmap/ic_launcher" />

@@ -5,12 +5,10 @@
     android:layout_height="match_parent"
     android:background="?attr/colorSurfaceContainer">
 
-    <ImageView
+    <damjay.photo.triage.ZoomableImageView
         android:id="@+id/ivPagerPhoto"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:adjustViewBounds="true"
-        android:scaleType="fitCenter"
         android:contentDescription="photo" />
 
     <View
@@ -19,5 +17,18 @@
         android:layout_gravity="bottom"
         android:background="@drawable/bg_gradient_top"
         android:alpha="0.35" />
+
+    <TextView
+        android:id="@+id/tvTapHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_hint_pill"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="6dp"
+        android:text="Pinch to zoom • Double-tap • Drag to pan"
+        android:textColor="#CCFFFFFF"
+        android:textSize="10sp"
+        android:visibility="gone" />
 
 </FrameLayout>

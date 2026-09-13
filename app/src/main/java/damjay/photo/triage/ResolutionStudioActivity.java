@@ -987,6 +987,23 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         });
     }
 
+    private void showFullscreen(File file) {
+        if (file == null || !file.exists()) return;
+        View v = LayoutInflater.from(this).inflate(R.layout.dialog_fullscreen_image, null);
+        ZoomableImageView iv = v.findViewById(R.id.ivFullscreen);
+        View btnClose = v.findViewById(R.id.btnCloseFullscreen);
+        // Use Glide for efficient loading, but also fallback to bitmap
+        Glide.with(this).load(file).fitCenter().into(iv);
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(v).create();
+        if (btnClose != null) btnClose.setOnClickListener(x -> dialog.dismiss());
+        // Tap image also dismiss? No, keep zoom; only close button dismisses. Allow back.
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.black);
+        }
+    }
+
     private void export() {
         String outPath = etOutput != null ? etOutput.getText().toString().trim() : "";
         if (outPath.isEmpty()) {
@@ -1047,13 +1064,17 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
         @Override public void onBindViewHolder(VH h, int pos) {
             StudioPhoto p = photos.get(pos);
+            // Reset zoom when view is reused
+            if (h.image instanceof ZoomableImageView) ((ZoomableImageView) h.image).resetZoom();
             // If edited, show saved edited file directly (exactly what was Applied)
             if (p.isEdited()) {
                 Glide.with(h.image.getContext()).load(p.editedFile).fitCenter().into(h.image);
+                h.image.setOnClickListener(v -> showFullscreen(p.editedFile));
             } else {
                 // Show live transformed preview — exactly what Apply will save (before pressing)
                 // First show original quickly, then replace with transformed preview when ready
                 Glide.with(h.image.getContext()).load(p.getDisplayFile()).fitCenter().into(h.image);
+                h.image.setOnClickListener(v -> showFullscreen(p.getDisplayFile()));
                 StudioConfig eff = p.effectiveConfig(config);
                 // Only generate preview if there is an actual transformation (ratio/crop/fit/split) to preview
                 boolean needsTransform = eff.targetRatio > 0 || eff.fitMode != StudioConfig.FitMode.CROP || eff.cropGravity != StudioConfig.CropGravity.CENTER || eff.splitMode != StudioConfig.SplitMode.NONE;
@@ -1089,9 +1110,6 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                 });
             }
             h.image.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
-            h.image.setOnTouchListener(new View.OnTouchListener() {
-                @Override public boolean onTouch(View v, MotionEvent event) { return false; }
-            });
             if (p.width == 0) {
                 dimExecutor.execute(() -> {
                     try {

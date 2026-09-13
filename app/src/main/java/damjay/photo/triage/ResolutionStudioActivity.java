@@ -1,6 +1,7 @@
 package damjay.photo.triage;
 
 import android.app.AlertDialog;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.text.Editable;
@@ -211,7 +212,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             panelContainer.setVisibility(View.VISIBLE);
             if (button instanceof MaterialButton) {
                 ((MaterialButton) button).setStrokeWidth(2);
-                ((MaterialButton) button).setStrokeColor(getColor(R.color.light_primary));
+                ((MaterialButton) button).setStrokeColor(ColorStateList.valueOf(getColor(R.color.light_primary)));
             }
             lastToolButton = button;
         }
@@ -857,7 +858,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             View card = (View) h.itemView;
             if (card instanceof com.google.android.material.card.MaterialCardView) {
                 ((com.google.android.material.card.MaterialCardView) card).setStrokeWidth(isSel ? 3 : 0);
-                ((com.google.android.material.card.MaterialCardView) card).setStrokeColor(getColor(R.color.light_primary));
+                ((com.google.android.material.card.MaterialCardView) card).setStrokeColor(ColorStateList.valueOf(getColor(R.color.light_primary)));
             }
             h.badge.setVisibility(p.isBase ? View.VISIBLE : View.GONE);
             h.discardBar.setVisibility(p.discarded ? View.VISIBLE : View.GONE);

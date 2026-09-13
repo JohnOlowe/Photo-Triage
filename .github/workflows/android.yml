@@ -32,19 +32,23 @@ jobs:
           "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee /tmp/gradle_test.log
+          EXIT=${PIPESTATUS[0]}
+          echo "Gradle exit code $EXIT"
+          cat /tmp/gradle_test.log
+          exit $EXIT
 
       - name: Show test reports on failure
         if: always()
         run: |
           echo "=== TEST RESULTS ==="
-          find app/build -type f | head -n 100 || true
+          find app/build -type f | head -n 200 || true
+          echo "--- gradle log ---"
+          cat /tmp/gradle_test.log 2>&1 | tail -n 1000 || true
           echo "--- test-results xml ---"
-          cat app/build/test-results/testDebugUnitTest/*.xml 2>&1 | head -n 800 || true
-          echo "--- reports html ---"
-          cat app/build/reports/tests/testDebugUnitTest/classes/*.html 2>&1 | head -n 800 || true
-          echo "--- gradle failure ---"
-          cat app/build/reports/tests/testDebugUnitTest/index.html 2>&1 | head -n 300 || true
+          cat app/build/test-results/testDebugUnitTest/*.xml 2>&1 | head -n 1000 || true
 
       - name: Upload test reports
         if: always()
@@ -52,6 +56,7 @@ jobs:
         with:
           name: test-reports
           path: |
+            /tmp/gradle_test.log
             app/build/test-results/
             app/build/reports/
           if-no-files-found: warn

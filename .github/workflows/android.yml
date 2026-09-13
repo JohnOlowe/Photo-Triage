@@ -1,5 +1,11 @@
 name: Android CI
 
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+  issues: write
+
 on:
   push:
   pull_request:
@@ -50,27 +56,53 @@ jobs:
 
       - name: Post diagnostics on failure
         if: failure()
-        run: |
-          echo "::error::CI failed — diagnostics dump follows (check annotations)"
-          # Dump entire gradle_test.log as annotations in 40-line chunks (annotation message limit ~64k, but we chunk)
-          if [ -f /tmp/gradle_test.log ]; then
-            echo "::error::=== /tmp/gradle_test.log HEAD 200 ==="
-            head -n 200 /tmp/gradle_test.log 2>/dev/null | while IFS= read -r line; do echo "::error::$line"; done || true
-            echo "::error::=== /tmp/gradle_test.log TAIL 400 ==="
-            tail -n 400 /tmp/gradle_test.log 2>/dev/null | while IFS= read -r line; do printf "::error::%s\n" "$line"; done || true
-            echo "::error::=== grep -i error ==="
-            grep -i -n "error" /tmp/gradle_test.log 2>/dev/null | head -n 80 | while IFS= read -r line; do echo "::error::$line"; done || true
-            echo "::error::=== What went wrong block ==="
-            grep -n "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 5 | while IFS= read -r line; do echo "::error::$line"; done || true
-            grep -A60 "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 80 | while IFS= read -r line; do echo "::error::$line"; done || true
-          else
-            echo "::error::no /tmp/gradle_test.log"
-          fi
-          if [ -f /tmp/gradle_build.log ]; then
-            echo "::error::=== /tmp/gradle_build.log tail ==="
-            tail -n 200 /tmp/gradle_build.log 2>/dev/null | while IFS= read -r line; do echo "::error::$line"; done || true
-          fi
-          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && echo "::error::=== $f ===" && cat "$f" 2>/dev/null | head -c 4000 | while IFS= read -r line; do echo "::error::$line"; done || true; done
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            let body = `CI failed for ${context.sha} @ ${context.ref}\n`;
+            try {
+              const stat = fs.statSync('/tmp/gradle_test.log');
+              body += `\n/tmp/gradle_test.log size ${stat.size} bytes\n`;
+              const log = fs.readFileSync('/tmp/gradle_test.log', 'utf8');
+              body += `\n==== HEAD 120 ====\n` + log.split('\n').slice(0,120).join('\n') + '\n';
+              body += `\n==== TAIL 500 ====\n` + log.split('\n').slice(-500).join('\n') + '\n';
+              body += `\n==== grep -i error (80) ====\n` + log.split('\n').filter(l=>/error/i.test(l)).slice(0,80).join('\n') + '\n';
+              const wwIdx = log.indexOf('What went wrong');
+              if (wwIdx>=0) body += `\n==== What went wrong block ====\n` + log.slice(wwIdx, wwIdx+4000) + '\n';
+              const pdrIdx = log.indexOf('processDebugResources');
+              if (pdrIdx>=0) body += `\n==== processDebugResources block ====\n` + log.slice(Math.max(0,pdrIdx-2000), pdrIdx+4000) + '\n';
+            } catch(e) { body += `\n(gradle_test.log read error: ${e.message})\n`; }
+            try {
+              const bl = fs.readFileSync('/tmp/gradle_build.log','utf8');
+              body += `\n==== gradle_build.log tail 300 ====\n` + bl.split('\n').slice(-300).join('\n') + '\n';
+            } catch(e) {}
+            try {
+              const dir='app/build/test-results/testDebugUnitTest';
+              if (fs.existsSync(dir)) {
+                for (const f of fs.readdirSync(dir)) if (f.endsWith('.xml')) {
+                  body += `\n==== ${f} ====\n` + fs.readFileSync(path.join(dir,f),'utf8').slice(0,6000) + '\n';
+                }
+              }
+            } catch(e) {}
+            body = body.slice(0,60000);
+            core.info(body.slice(0,5000));
+            // post as commit comment (now has permission)
+            try {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: '```\n' + body + '\n```'
+              });
+              core.info('posted commit comment');
+            } catch(e) { core.warning('commit comment failed: ' + e.message); }
+            // also emit as error for annotations
+            for (const line of body.split('\n').slice(0,300)) {
+              if (line.trim()) core.error(line);
+            }
+            core.setFailed('CI failed — see commit comment & annotations');
 
       - name: Annotate failure tail
         if: failure()

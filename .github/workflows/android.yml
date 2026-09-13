@@ -34,6 +34,18 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --stacktrace --no-daemon
 
+      - name: Show test reports on failure
+        if: always()
+        run: |
+          echo "=== TEST RESULTS ==="
+          find app/build -type f | head -n 100 || true
+          echo "--- test-results xml ---"
+          cat app/build/test-results/testDebugUnitTest/*.xml 2>&1 | head -n 500 || true
+          echo "--- reports html ---"
+          cat app/build/reports/tests/testDebugUnitTest/classes/*.html 2>&1 | head -n 500 || true
+          echo "--- gradle failure ---"
+          cat app/build/reports/tests/testDebugUnitTest/index.html 2>&1 | head -n 200 || true
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 

@@ -125,7 +125,7 @@
                             app:cornerRadius="12dp" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnStudioReload"
-                            style="@style/Widget.Material3.Button.FilledButton"
+                            style="@style/Widget.Material3.Button"
                             android:layout_width="wrap_content"
                             android:layout_height="36dp"
                             android:layout_marginStart="8dp"

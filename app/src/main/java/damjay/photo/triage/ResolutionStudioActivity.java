@@ -102,10 +102,14 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         tvStatus = findViewById(R.id.tvStudioStatus);
         noPhotos = findViewById(R.id.tvNoPhotos);
 
-        // Folder
+        // Folder: honor intent extra "folder" (from MainActivity/Tools) then fallback
         File defaultFolder = settings.getInboxFolder();
-        // If default not exists, try first category
-        if (!defaultFolder.exists()) {
+        String intentFolder = getIntent() != null ? getIntent().getStringExtra("folder") : null;
+        if (intentFolder != null && !intentFolder.trim().isEmpty()) {
+            File f = new File(intentFolder.trim());
+            if (f.exists()) defaultFolder = f;
+            else defaultFolder = new File(intentFolder.trim());
+        } else if (!defaultFolder.exists()) {
             List<String> cats = settings.getCategories();
             if (!cats.isEmpty()) defaultFolder = new File(settings.getRootFolder(), cats.get(0));
         }

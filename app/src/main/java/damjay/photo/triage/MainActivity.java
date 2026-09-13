@@ -1,9 +1,6 @@
 package damjay.photo.triage;
 
 import android.Manifest;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -13,7 +10,6 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,8 +30,10 @@ import com.yuyakaido.android.cardstackview.CardStackView;
 import com.yuyakaido.android.cardstackview.Direction;
 
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -59,8 +57,20 @@ public class MainActivity extends AppCompatActivity {
     private View emptyState;
     private TextView tvProgress;
     private TextView tvNoCategories;
+    private View btnUndoView;
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final Deque<SwipeRecord> undoStack = new ArrayDeque<>();
+
+    private static class SwipeRecord {
+        File source;
+        String category;
+        File destFile;
+        boolean wasMove;
+        SwipeRecord(File s, String c, File d, boolean m) {
+            source = s; category = c; destFile = d; wasMove = m;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
         emptyState = findViewById(R.id.emptyState);
         tvProgress = findViewById(R.id.tvProgress);
         tvNoCategories = findViewById(R.id.tvNoCategories);
+        btnUndoView = findViewById(R.id.btnUndo);
 
         // Toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
@@ -137,6 +148,9 @@ public class MainActivity extends AppCompatActivity {
             i.putExtra("folder", currentSourceFolder);
             startActivity(i);
         });
+        if (btnUndoView != null) btnUndoView.setOnClickListener(v -> undoLastSwipe());
+        updateUndoVisibility();
+
         View btnToggle = findViewById(R.id.btnToggleCategories);
         if (btnToggle != null) {
             btnToggle.setOnClickListener(v -> {
@@ -163,6 +177,55 @@ public class MainActivity extends AppCompatActivity {
             boolean expanded = recyclerCategories == null || recyclerCategories.getVisibility() == View.VISIBLE;
             boolean show = expanded && (categoryList == null || categoryList.isEmpty());
             tvNoCategories.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void updateUndoVisibility() {
+        if (btnUndoView == null) return;
+        boolean has = !undoStack.isEmpty() && layoutManager != null && layoutManager.getTopPosition() > 0;
+        // Also show if topPosition==0 but stack has something and we can still rewind? CardStackView rewind needs top>0
+        // Show only when we can rewind
+        btnUndoView.setVisibility(has ? View.VISIBLE : View.GONE);
+        btnUndoView.setAlpha(has ? 1f : 0.5f);
+    }
+
+    private void undoLastSwipe() {
+        if (undoStack.isEmpty()) {
+            Toast.makeText(this, "Nothing to undo", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        SwipeRecord rec = undoStack.pop();
+        updateUndoVisibility();
+        // If file was moved, move it back
+        if (rec.category != null && rec.destFile != null && rec.destFile.exists()) {
+            executorService.execute(() -> {
+                File sourceParent = rec.source.getParentFile();
+                if (sourceParent != null) {
+                    if (!sourceParent.exists()) sourceParent.mkdirs();
+                    File movedBack = FileUtils.moveOrCopy(rec.destFile, sourceParent, true);
+                    if (movedBack != null) {
+                        FileUtils.scanMedia(MainActivity.this, Collections.singletonList(movedBack.getAbsolutePath()));
+                        FileUtils.scanMedia(MainActivity.this, Collections.singletonList(rec.destFile.getAbsolutePath()));
+                    } else {
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, R.string.file_operation_failed, Toast.LENGTH_SHORT).show());
+                    }
+                }
+                runOnUiThread(() -> {
+                    if (layoutManager != null && layoutManager.getTopPosition() > 0) {
+                        cardStackView.rewind();
+                    }
+                    updateUndoVisibility();
+                    updateProgress();
+                    Toast.makeText(MainActivity.this, "Restacked: " + rec.source.getName(), Toast.LENGTH_SHORT).show();
+                });
+            });
+        } else {
+            if (layoutManager != null && layoutManager.getTopPosition() > 0) {
+                cardStackView.rewind();
+            }
+            updateUndoVisibility();
+            updateProgress();
+            Toast.makeText(this, rec.category == null ? "Restacked" : "Restacked: " + rec.source.getName(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -205,7 +268,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showCustomSourceDialog() {
-        // Creative combined browse + paste dialog: EditText + two actions inline
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_path_with_browser, null);
         TextInputLayout til = view.findViewById(R.id.tilPath);
         TextInputEditText et = view.findViewById(R.id.etPath);
@@ -215,7 +277,6 @@ public class MainActivity extends AppCompatActivity {
         et.setText(currentSourceFolder);
         et.setSelection(et.getText() != null ? et.getText().length() : 0);
 
-        // Wire browse -> folder picker that updates the field
         FolderPickerDialog.attach(this, et, btnBrowse, btnPaste);
 
         new AlertDialog.Builder(this)
@@ -275,14 +336,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        // Fall back to the configured inbox if the current source no longer exists.
         File current = new File(currentSourceFolder);
         if (!current.exists() || !current.isDirectory()) {
-            // Keep the path but show empty state; don't silently switch if user intentionally picked missing?
-            // Only fallback if path was the old inbox that no longer matches settings
             File inbox = settings.getInboxFolder();
             if (!currentSourceFolder.equals(inbox.getAbsolutePath())) {
-                // If inbox changed, update button
                 updateSourceButton();
             }
         } else {
@@ -292,7 +349,6 @@ public class MainActivity extends AppCompatActivity {
         if (canReadStorage() && (adapter == null || adapter.getItemCount() == 0)) {
             loadPhotos();
         }
-        // Refresh categories in case changed in Settings (though not categories there)
         updateCategoriesEmptyState();
     }
 
@@ -344,6 +400,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadPhotos() {
+        undoStack.clear();
+        updateUndoVisibility();
         photoList = new ArrayList<>();
         File directory = new File(currentSourceFolder);
 
@@ -364,10 +422,29 @@ public class MainActivity extends AppCompatActivity {
         adapter = new PhotoAdapter(photoList, settings.getLabelMode());
         layoutManager = new CardStackLayoutManager(this, new CardStackListener() {
             @Override public void onCardDragging(Direction direction, float ratio) {}
-            @Override public void onCardSwiped(Direction direction) { updateProgress(); }
-            @Override public void onCardRewound() { updateProgress(); }
+            @Override public void onCardSwiped(Direction direction) {
+                // Handle manual swipe (gesture) that wasn't via processPhoto
+                int swipedPos = layoutManager.getTopPosition() - 1;
+                if (swipedPos >= 0 && swipedPos < photoList.size()) {
+                    File swipedFile = photoList.get(swipedPos);
+                    boolean alreadyRecorded = false;
+                    if (!undoStack.isEmpty()) {
+                        SwipeRecord top = undoStack.peek();
+                        if (top != null && top.source.equals(swipedFile)) alreadyRecorded = true;
+                    }
+                    if (!alreadyRecorded) {
+                        undoStack.push(new SwipeRecord(swipedFile, null, null, false));
+                    }
+                }
+                updateProgress();
+                updateUndoVisibility();
+            }
+            @Override public void onCardRewound() {
+                updateProgress();
+                updateUndoVisibility();
+            }
             @Override public void onCardCanceled() {}
-            @Override public void onCardAppeared(View view, int position) { updateProgress(); }
+            @Override public void onCardAppeared(View view, int position) { updateProgress(); updateUndoVisibility(); }
             @Override public void onCardDisappeared(View view, int position) {}
         });
         // Sensible swipe settings
@@ -380,6 +457,7 @@ public class MainActivity extends AppCompatActivity {
         cardStackView.setAdapter(adapter);
         updateEmptyState();
         updateProgress();
+        updateUndoVisibility();
     }
 
     private void updateEmptyState() {
@@ -387,6 +465,7 @@ public class MainActivity extends AppCompatActivity {
         if (emptyState != null) emptyState.setVisibility(empty ? View.VISIBLE : View.GONE);
         if (cardStackView != null) cardStackView.setVisibility(empty ? View.INVISIBLE : View.VISIBLE);
         if (tvProgress != null) tvProgress.setVisibility(empty ? View.GONE : View.VISIBLE);
+        if (empty) updateUndoVisibility();
     }
 
     private void updateProgress() {
@@ -399,7 +478,6 @@ public class MainActivity extends AppCompatActivity {
         int current = Math.min(top + 1, total);
         tvProgress.setText(current + " / " + total);
         tvProgress.setVisibility(View.VISIBLE);
-        // Hide empty state if we have scrolled back
         updateEmptyState();
     }
 
@@ -413,9 +491,18 @@ public class MainActivity extends AppCompatActivity {
         if (currentPosition < photoList.size()) {
             File currentFile = photoList.get(currentPosition);
 
+            // Record for undo before swipe
+            File destFile = null;
+            boolean wasMove = settings.isMoveOperation();
             if (categoryName != null) {
+                File destDir = settings.getFolderForCategory(categoryName);
+                destFile = new File(destDir, currentFile.getName());
+                undoStack.push(new SwipeRecord(currentFile, categoryName, destFile, wasMove));
                 executorService.execute(() -> performFileOperation(currentFile, categoryName));
+            } else {
+                undoStack.push(new SwipeRecord(currentFile, null, null, false));
             }
+            updateUndoVisibility();
 
             cardStackView.swipe();
         } else {

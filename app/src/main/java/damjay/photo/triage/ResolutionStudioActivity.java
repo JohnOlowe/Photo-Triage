@@ -16,6 +16,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
@@ -176,6 +177,8 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                 updateCounts();
             }
         });
+        View btnToolPreview = findViewById(R.id.btnToolPreview);
+        if (btnToolPreview != null) btnToolPreview.setOnClickListener(v -> showGridPreview());
 
         loadPhotos();
         updateBaseInfo();
@@ -219,7 +222,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
     }
 
     private void resetToolButtons() {
-        int[] ids = {R.id.btnToolRatio, R.id.btnToolCrop, R.id.btnToolFit, R.id.btnToolSplit, R.id.btnToolMore};
+        int[] ids = {R.id.btnToolRatio, R.id.btnToolCrop, R.id.btnToolFit, R.id.btnToolSplit, R.id.btnToolMore, R.id.btnToolPreview};
         for (int id : ids) {
             View v = findViewById(id);
             if (v instanceof MaterialButton) ((MaterialButton) v).setStrokeWidth(0);
@@ -641,6 +644,41 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         splitPreviewAdapter.update(halves);
     }
 
+    private void showGridPreview() {
+        if (photos.isEmpty()) {
+            Toast.makeText(this, R.string.studio_no_photos, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_studio_grid_preview, null);
+        RecyclerView rvGrid = view.findViewById(R.id.rvGridPreview);
+        TextView tvInfo = view.findViewById(R.id.tvGridPreviewInfo);
+        if (tvInfo != null) {
+            String ratio = config.targetRatio > 0 ? config.ratioLabel : "Free";
+            tvInfo.setText(photos.size() + " photos • " + ratio + " • " + config.fitMode.name() + " • tap to jump");
+        }
+        rvGrid.setLayoutManager(new GridLayoutManager(this, 2));
+        PreviewAllAdapter previewAdapter = new PreviewAllAdapter();
+        rvGrid.setAdapter(previewAdapter);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(view)
+                .create();
+        View btnClose = view.findViewById(R.id.btnClosePreview);
+        if (btnClose != null) btnClose.setOnClickListener(v -> dialog.dismiss());
+        // When a grid item is tapped, jump pager to that position and dismiss
+        previewAdapter.setOnItemClick(pos -> {
+            if (vpStudio != null && pos >= 0 && pos < photos.size()) {
+                vpStudio.setCurrentItem(pos, true);
+                dialog.dismiss();
+            }
+        });
+        dialog.show();
+        // Make dialog full width
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+    }
+
     private void showPerPhotoEdit(StudioPhoto p, int pos) {
         View v = LayoutInflater.from(this).inflate(R.layout.dialog_studio_photo_edit, null);
         TextView tvName = v.findViewById(R.id.tvEditPhotoName);
@@ -813,7 +851,8 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
         @Override public void onBindViewHolder(VH h, int pos) {
             StudioPhoto p = photos.get(pos);
-            Glide.with(h.image.getContext()).load(p.file).centerCrop().into(h.image);
+            // Show actual image not cropped to fill (fitCenter inside 1:1 square) — user asked "not fit into view"
+            Glide.with(h.image.getContext()).load(p.file).fitCenter().into(h.image);
             h.image.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
             h.image.setOnTouchListener(new View.OnTouchListener() {
                 @Override public boolean onTouch(View v, MotionEvent event) { return false; }
@@ -899,6 +938,77 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         static class VH extends RecyclerView.ViewHolder {
             ImageView image;
             VH(View v) { super(v); image = v.findViewById(R.id.ivSplit); }
+        }
+    }
+
+    // Preview all — shows transformed result (as it will be exported), not fitCenter into square
+    class PreviewAllAdapter extends RecyclerView.Adapter<PreviewAllAdapter.VH> {
+        private OnItemClickListener listener;
+        interface OnItemClickListener { void onClick(int pos); }
+        void setOnItemClick(OnItemClickListener l) { listener = l; }
+
+        @Override public VH onCreateViewHolder(ViewGroup parent, int viewType) {
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_preview_all, parent, false);
+            return new VH(v);
+        }
+        @Override public void onBindViewHolder(VH h, int pos) {
+            StudioPhoto p = photos.get(pos);
+            // Name & res — immediate
+            h.tvName.setText(p.name);
+            if (p.width > 0) h.tvRes.setText(p.width + "×" + p.height + " • " + StudioConfig.labelForRatio(p.aspect));
+            else h.tvRes.setText("…");
+            h.badge.setVisibility(p.isBase ? View.VISIBLE : View.GONE);
+            h.discard.setVisibility(p.discarded ? View.VISIBLE : View.GONE);
+            h.iv.setAlpha(p.discarded ? 0.5f : 1f);
+
+            // Lazy: first show original via Glide, then replace with transformed bitmap in background
+            Glide.with(h.iv.getContext()).load(p.file).fitCenter().into(h.iv);
+
+            // Generate transformed preview (small) off UI thread — true “as it currently is”
+            StudioConfig eff = p.effectiveConfig(config);
+            bgExecutor.execute(() -> {
+                try {
+                    Bitmap src = ImageProcessor.loadBitmap(p.file, 800);
+                    if (src == null) return;
+                    int sw = src.getWidth();
+                    int sh = src.getHeight();
+                    Bitmap transformed = ImageProcessor.transform(src, eff, sw, sh);
+                    if (transformed == null) return;
+                    List<Bitmap> splits = ImageProcessor.split(transformed, eff);
+                    Bitmap toShow;
+                    if (splits.isEmpty()) toShow = transformed;
+                    else {
+                        toShow = splits.get(0);
+                        for (int i = 1; i < splits.size(); i++) splits.get(i).recycle();
+                        // split() recycles transformed, so don't recycle it again
+                    }
+                    runOnUiThread(() -> {
+                        if (h.getAdapterPosition() == pos) {
+                            h.iv.setImageBitmap(toShow);
+                        } else {
+                            toShow.recycle();
+                        }
+                    });
+                } catch (Exception ignored) {}
+            });
+
+            h.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onClick(pos);
+            });
+            h.itemView.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
+        }
+        @Override public int getItemCount() { return photos.size(); }
+        class VH extends RecyclerView.ViewHolder {
+            ImageView iv;
+            TextView tvName, tvRes, badge, discard;
+            VH(View v) {
+                super(v);
+                iv = v.findViewById(R.id.ivPreviewAll);
+                tvName = v.findViewById(R.id.tvPreviewAllName);
+                tvRes = v.findViewById(R.id.tvPreviewAllRes);
+                badge = v.findViewById(R.id.tvPreviewAllBadge);
+                discard = v.findViewById(R.id.tvPreviewAllDiscard);
+            }
         }
     }
 

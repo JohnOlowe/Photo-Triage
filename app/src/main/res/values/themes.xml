@@ -18,7 +18,7 @@
     <item name="colorError">@color/light_error</item>
     <item name="colorSurfaceContainer">@color/light_surfaceContainer</item>
     <item name="colorSurfaceContainerHigh">@color/light_surfaceContainerHigh</item>
-    <item name="elevationLevel2">@color/light_surfaceContainer</item>
+    <item name="colorSurfaceContainerHighest">@color/light_surfaceContainerHighest</item>
   </style>
 
   <style name="AppTheme" parent="Base.AppTheme" />

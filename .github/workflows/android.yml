@@ -50,61 +50,29 @@ jobs:
 
       - name: Post diagnostics on failure
         if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            let body = `CI failed for ${context.sha} @ ${context.ref}\n`;
-            try {
-              const log = fs.readFileSync('/tmp/gradle_test.log', 'utf8');
-              // Find interesting section: BUILD FAILED, FAILED, Exception
-              const lines = log.split('\n');
-              const failIdx = lines.findIndex(l => l.includes('BUILD FAILED') || l.includes('FAILED') || l.includes('AssertionFailed'));
-              const snippet = failIdx >= 0 ? lines.slice(Math.max(0, failIdx - 120), failIdx + 80).join('\n') : log.slice(-8000);
-              body += '\n==== gradle_test.log snippet ====\n' + snippet + '\n';
-            } catch(e) { body += '\n(no gradle_test.log: ' + e.message + ')\n'; }
-            try {
-              const buildLog = fs.readFileSync('/tmp/gradle_build.log', 'utf8');
-              body += '\n==== gradle_build.log tail ====\n' + buildLog.slice(-4000) + '\n';
-            } catch(e) {}
-            // junit xml
-            try {
-              const dir = 'app/build/test-results/testDebugUnitTest';
-              if (fs.existsSync(dir)) {
-                for (const f of fs.readdirSync(dir)) {
-                  if (f.endsWith('.xml')) {
-                    const c = fs.readFileSync(path.join(dir, f), 'utf8');
-                    body += `\n==== ${f} ====\n` + c.slice(0, 6000) + '\n';
-                  }
-                }
-              }
-            } catch(e) { body += '\n(junit read error: ' + e.message + ')\n'; }
-            // also html report fragment
-            try {
-              const htmlDir = 'app/build/reports/tests/testDebugUnitTest/classes';
-              if (fs.existsSync(htmlDir)) {
-                for (const f of fs.readdirSync(htmlDir)) {
-                  if (f.endsWith('.html')) {
-                    const c = fs.readFileSync(path.join(htmlDir, f), 'utf8');
-                    // strip tags crudely
-                    const text = c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 4000);
-                    body += `\n==== ${f} text ====\n` + text + '\n';
-                  }
-                }
-              }
-            } catch(e) {}
-            body = body.slice(0, 60000);
-            await github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha,
-              body: '```\n' + body + '\n```'
-            });
-            core.setFailed('CI failed — diagnostics posted as commit comment');
+        run: |
+          echo "::group::gradle_test.log tail"
+          tail -n 500 /tmp/gradle_test.log 2>/dev/null || cat /tmp/gradle_test.log 2>/dev/null | tail -n 500 || echo "no log"
+          echo "::endgroup::"
+          echo "::group::gradle_test.log BUILD FAILED snippet"
+          grep -n "BUILD FAILED\|FAILURE\|what went wrong\|What went wrong\|Execution failed\|error:" /tmp/gradle_test.log 2>/dev/null | head -n 50 || true
+          grep -A30 "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 80 || true
+          echo "::endgroup::"
+          echo "::group::junit xml"
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && echo "=== $f ===" && cat "$f" | head -c 8000; done || true
+          echo "::endgroup::"
+          echo "::group::test report html text"
+          for f in app/build/reports/tests/testDebugUnitTest/classes/*.html; do [ -f "$f" ] && echo "=== $f ===" && sed 's/<[^>]*>/ /g' "$f" | tr -s ' ' | head -c 5000; done || true
+          echo "::endgroup::"
+          # emit annotations for each failed line
+          echo "::error::CI failed — full logs in groups above; key snippet follows"
+          grep -m 5 "FAILURE\|FAILED\|Assertion" /tmp/gradle_test.log 2>/dev/null | while IFS= read -r line; do echo "::error::$line"; done || true
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do
+            [ -f "$f" ] && grep -m 10 "failure\|error" "$f" 2>/dev/null | while IFS= read -r line; do echo "::error::$f: $line"; done || true
+          done
 
       - name: Annotate failure tail
         if: failure()
         run: |
-          echo "::error::CI failed — see commit comments for full logs"
+          echo "::error::CI failed — see Post diagnostics groups for full logs"
           tail -n 120 /tmp/gradle_test.log 2>/dev/null | head -c 5000 | while IFS= read -r line; do echo "::error::$line"; done || true

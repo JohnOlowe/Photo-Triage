@@ -51,30 +51,26 @@ jobs:
       - name: Post diagnostics on failure
         if: failure()
         run: |
-          echo "::group::gradle_test.log tail"
-          tail -n 600 /tmp/gradle_test.log 2>/dev/null || cat /tmp/gradle_test.log 2>/dev/null | tail -n 600 || echo "no log"
-          echo "::endgroup::"
-          echo "::group::gradle_test.log error snippet"
-          grep -n "error:\|AAPT\|processDebugResources\|What went wrong\|Execution failed\|FAILED\|FAILURE" /tmp/gradle_test.log 2>/dev/null | head -n 120 || true
-          echo "--- What went wrong block ---"
-          grep -A80 "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 120 || true
-          echo "--- resource errors ---"
-          grep -i "resource.*not found\|missing\|failed linking" /tmp/gradle_test.log 2>/dev/null | head -n 60 || true
-          echo "::endgroup::"
-          echo "::group::junit xml"
-          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && echo "=== $f ===" && cat "$f" | head -c 8000; done || true
-          echo "::endgroup::"
-          echo "::group::aapt intermediates"
-          find app/build -name "*.txt" 2>/dev/null | head -20
-          for f in app/build/intermediates/*/mergeDebugResources/*/aapt* 2>/dev/null; do echo "=== $f ==="; cat "$f" 2>/dev/null | head -n 100; done || true
-          echo "::endgroup::"
-          # emit annotations for key lines
-          echo "::error::CI failed — check Post diagnostics groups for full logs"
-          grep -n "error:\|AAPT error" /tmp/gradle_test.log 2>/dev/null | head -n 20 | while IFS= read -r line; do echo "::error::$line"; done || true
-          grep -A2 "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 20 | while IFS= read -r line; do echo "::error::$line"; done || true
-          for f in app/build/test-results/testDebugUnitTest/*.xml; do
-            [ -f "$f" ] && grep -m 10 "failure\|error" "$f" 2>/dev/null | while IFS= read -r line; do echo "::error::$f: $line"; done || true
-          done
+          echo "::error::CI failed — diagnostics dump follows (check annotations)"
+          # Dump entire gradle_test.log as annotations in 40-line chunks (annotation message limit ~64k, but we chunk)
+          if [ -f /tmp/gradle_test.log ]; then
+            echo "::error::=== /tmp/gradle_test.log HEAD 200 ==="
+            head -n 200 /tmp/gradle_test.log 2>/dev/null | while IFS= read -r line; do echo "::error::$line"; done || true
+            echo "::error::=== /tmp/gradle_test.log TAIL 400 ==="
+            tail -n 400 /tmp/gradle_test.log 2>/dev/null | while IFS= read -r line; do printf "::error::%s\n" "$line"; done || true
+            echo "::error::=== grep -i error ==="
+            grep -i -n "error" /tmp/gradle_test.log 2>/dev/null | head -n 80 | while IFS= read -r line; do echo "::error::$line"; done || true
+            echo "::error::=== What went wrong block ==="
+            grep -n "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 5 | while IFS= read -r line; do echo "::error::$line"; done || true
+            grep -A60 "What went wrong" /tmp/gradle_test.log 2>/dev/null | head -n 80 | while IFS= read -r line; do echo "::error::$line"; done || true
+          else
+            echo "::error::no /tmp/gradle_test.log"
+          fi
+          if [ -f /tmp/gradle_build.log ]; then
+            echo "::error::=== /tmp/gradle_build.log tail ==="
+            tail -n 200 /tmp/gradle_build.log 2>/dev/null | while IFS= read -r line; do echo "::error::$line"; done || true
+          fi
+          for f in app/build/test-results/testDebugUnitTest/*.xml; do [ -f "$f" ] && echo "::error::=== $f ===" && cat "$f" 2>/dev/null | head -c 4000 | while IFS= read -r line; do echo "::error::$line"; done || true; done
 
       - name: Annotate failure tail
         if: failure()

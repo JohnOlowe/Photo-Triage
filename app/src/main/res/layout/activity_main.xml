@@ -23,13 +23,13 @@
             style="@style/Widget.Material3.Toolbar.Surface"
             app:menu="@menu/menu_main" />
 
-        <!-- Source bar -->
+        <!-- Source bar — slimmer -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="16dp"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="8dp"
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeColor="?attr/colorOutlineVariant"
@@ -41,7 +41,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:padding="8dp">
+                android:padding="6dp">
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/btnChangeSource"
@@ -60,69 +60,72 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnReload"
                     style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
+                    android:layout_width="36dp"
                     android:layout_height="36dp"
                     app:icon="@drawable/ic_refresh"
                     app:iconSize="18dp"
-                    android:text="@string/reload_deck"
-                    android:textSize="12sp"
-                    app:cornerRadius="12dp" />
+                    app:iconPadding="0dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    app:cornerRadius="10dp"
+                    android:contentDescription="@string/reload_deck" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSettings"
                     style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     app:icon="@drawable/ic_settings"
-                    app:iconSize="22dp"
+                    app:iconSize="20dp"
                     app:iconPadding="0dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="12dp"
+                    app:cornerRadius="10dp"
                     android:contentDescription="@string/settings" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnTools"
                     style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="42dp"
-                    android:layout_height="42dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     app:icon="@drawable/ic_tools"
-                    app:iconSize="20dp"
+                    app:iconSize="18dp"
                     app:iconPadding="0dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    app:cornerRadius="12dp"
+                    app:cornerRadius="10dp"
                     android:contentDescription="@string/tools" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Main content -->
+    <!-- Main content — taller card, compact bottom rail -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:clipToPadding="false">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:paddingBottom="8dp">
+            android:paddingBottom="0dp">
 
-            <!-- Card stack -->
+            <!-- Card stack — now 68% for taller viewing -->
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:id="@+id/cardContainer"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:layout_marginHorizontal="12dp"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 app:layout_constraintTop_toTopOf="parent"
                 app:layout_constraintBottom_toTopOf="@+id/categoriesCard"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintHeight_default="percent"
-                app:layout_constraintHeight_percent="0.58">
+                app:layout_constraintHeight_percent="0.68">
 
                 <com.yuyakaido.android.cardstackview.CardStackView
                     android:id="@+id/cardStackView"
@@ -197,15 +200,15 @@
                     tools:visibility="visible" />
             </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <!-- Categories -->
+            <!-- Destination folders — compact header, no “long press” clutter -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/categoriesCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="12dp"
-                app:cardCornerRadius="20dp"
-                app:cardElevation="1dp"
+                android:layout_marginTop="8dp"
+                app:cardCornerRadius="18dp"
+                app:cardElevation="0dp"
                 app:strokeColor="?attr/colorOutlineVariant"
                 app:strokeWidth="0.7dp"
                 app:cardBackgroundColor="?attr/colorSurfaceContainer"
@@ -217,7 +220,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="12dp">
+                    android:padding="10dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -236,19 +239,28 @@
                             android:letterSpacing="0.08"
                             android:textAllCaps="true" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="long press to remove"
-                            android:textColor="?attr/colorOutline"
-                            android:textSize="10sp" />
+                        <!-- Collapse toggle -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnToggleCategories"
+                            style="@style/Widget.Material3.Button.TextButton"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            app:icon="@drawable/ic_back"
+                            app:iconSize="16dp"
+                            app:iconPadding="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            app:cornerRadius="8dp"
+                            android:rotation="270"
+                            android:contentDescription="Toggle folders" />
+
                     </LinearLayout>
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/recyclerCategories"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="6dp"
                         android:clipToPadding="false"
                         android:orientation="horizontal"
                         android:paddingVertical="2dp"
@@ -267,65 +279,63 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Controls -->
+            <!-- Compact bottom rail — Add / Skip / Studio in one row (was two rows) -->
             <LinearLayout
                 android:id="@+id/buttonContainer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
+                android:weightSum="3"
                 android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="12dp"
                 app:layout_constraintTop_toBottomOf="@id/categoriesCard"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent">
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAddCategory"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1.2"
-                    android:layout_marginEnd="8dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
                     android:text="@string/add_folder"
-                    android:textSize="13sp"
-                    app:cornerRadius="16dp"
+                    android:textSize="12sp"
+                    app:cornerRadius="12dp"
                     app:icon="@drawable/ic_add"
-                    app:iconSize="20dp" />
+                    app:iconSize="18dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSkip"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="0dp"
-                    android:layout_height="52dp"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
                     android:text="@string/skip_keep"
+                    android:textSize="12sp"
                     android:textColor="?attr/colorError"
                     app:strokeColor="?attr/colorError"
-                    app:cornerRadius="16dp"
+                    app:cornerRadius="12dp"
                     app:icon="@drawable/ic_skip"
                     app:iconTint="?attr/colorError"
-                    app:iconSize="18dp" />
-            </LinearLayout>
-
+                    app:iconSize="16dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnStudio"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_marginHorizontal="16dp"
-                    android:layout_marginTop="10dp"
-                    android:layout_marginBottom="16dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
                     android:text="@string/resolution_studio"
-                    android:textSize="13sp"
+                    android:textSize="11sp"
+                    app:cornerRadius="12dp"
                     app:icon="@drawable/ic_studio"
-                    app:iconSize="18dp"
-                    app:cornerRadius="14dp"
-                    app:layout_constraintTop_toBottomOf="@id/buttonContainer"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintBottom_toBottomOf="parent" />
+                    app:iconSize="16dp" />
+            </LinearLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.core.widget.NestedScrollView>

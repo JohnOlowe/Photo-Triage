@@ -127,6 +127,28 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         findViewById(R.id.btnResetOverrides).setOnClickListener(v -> resetOverrides());
         findViewById(R.id.btnExport).setOnClickListener(v -> export());
 
+        // Photos grid
+        rvPhotos.setLayoutManager(new GridLayoutManager(this, 2));
+        rvPhotos.setNestedScrollingEnabled(false);
+        adapter = new StudioPhotoAdapter(photos, new StudioPhotoAdapter.Listener() {
+            @Override public void onClick(StudioPhoto p, int pos) { showPreview(p); }
+            @Override public void onLongClick(StudioPhoto p, int pos) { showPerPhotoEdit(p, pos); }
+            @Override public void onBaseClick(StudioPhoto p, int pos) { setBase(p); }
+            @Override public void onDiscardToggle(StudioPhoto p, int pos, boolean discard) {
+                p.discarded = discard;
+                if (adapter != null) adapter.notifyItemChanged(pos);
+                updateCounts();
+            }
+            @Override public void onSelectToggle(StudioPhoto p, int pos, boolean selected) {
+                updateCounts();
+            }
+        });
+        rvPhotos.setAdapter(adapter);
+
+        rvSplitPreview.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
+        splitPreviewAdapter = new SplitPreviewAdapter(new ArrayList<>());
+        rvSplitPreview.setAdapter(splitPreviewAdapter);
+
         // Ratio chips
         chipGroupRatio.setOnCheckedStateChangeListener((group, checkedIds) -> {
             if (checkedIds.isEmpty()) return;
@@ -246,27 +268,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             refreshAll();
         });
 
-        // Photos grid
-        rvPhotos.setLayoutManager(new GridLayoutManager(this, 2));
-        rvPhotos.setNestedScrollingEnabled(false);
-        adapter = new StudioPhotoAdapter(photos, new StudioPhotoAdapter.Listener() {
-            @Override public void onClick(StudioPhoto p, int pos) { showPreview(p); }
-            @Override public void onLongClick(StudioPhoto p, int pos) { showPerPhotoEdit(p, pos); }
-            @Override public void onBaseClick(StudioPhoto p, int pos) { setBase(p); }
-            @Override public void onDiscardToggle(StudioPhoto p, int pos, boolean discard) {
-                p.discarded = discard;
-                adapter.notifyItemChanged(pos);
-                updateCounts();
-            }
-            @Override public void onSelectToggle(StudioPhoto p, int pos, boolean selected) {
-                updateCounts();
-            }
-        });
-        rvPhotos.setAdapter(adapter);
 
-        rvSplitPreview.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false));
-        splitPreviewAdapter = new SplitPreviewAdapter(new ArrayList<>());
-        rvSplitPreview.setAdapter(splitPreviewAdapter);
 
         // Initial load
         loadPhotos();
@@ -343,7 +345,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         if (!dir.exists() || !dir.isDirectory()) {
             Toast.makeText(this, R.string.folder_missing, Toast.LENGTH_SHORT).show();
             photos.clear();
-            adapter.notifyDataSetChanged();
+            if (adapter != null) adapter.notifyDataSetChanged();
             updateCounts();
             return;
         }
@@ -361,7 +363,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
                         p.setDimensions(d.width, d.height);
                         runOnUiThread(() -> {
-                            adapter.notifyDataSetChanged();
+                            if (adapter != null) adapter.notifyDataSetChanged();
                             updateCounts();
                             updateSplitPreview();
                         });
@@ -378,7 +380,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                     for (StudioPhoto p : photos) if (p.file.equals(basePhoto.file)) { p.isBase = true; basePhoto = p; found = true; break; }
                     if (!found) basePhoto = null;
                 }
-                adapter.notifyDataSetChanged();
+                if (adapter != null) adapter.notifyDataSetChanged();
                 updateCounts();
                 updateSplitPreview();
                 tvStatus.setText(getString(R.string.tool_scan_result, photos.size()));
@@ -405,7 +407,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             }
         }
         updateBaseInfo();
-        adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.notifyDataSetChanged();
         refreshAll();
     }
 
@@ -416,7 +418,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         config.ratioLabel = "Free";
         chipGroupRatio.check(R.id.chipRatioFree);
         updateBaseInfo();
-        adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.notifyDataSetChanged();
         refreshAll();
     }
 
@@ -449,6 +451,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
     }
 
     private void updateCounts() {
+        if (tvCount == null || noPhotos == null || rvPhotos == null) return;
         if (photos.isEmpty()) {
             tvCount.setText("0 photos");
             noPhotos.setVisibility(View.VISIBLE);
@@ -469,29 +472,30 @@ public class ResolutionStudioActivity extends AppCompatActivity {
 
     private void selectAll(boolean sel) {
         for (StudioPhoto p : photos) p.selected = sel;
-        adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.notifyDataSetChanged();
         updateCounts();
     }
 
     private void discardSelected() {
         for (StudioPhoto p : photos) if (p.selected) p.discarded = true;
-        adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.notifyDataSetChanged();
         updateCounts();
         Toast.makeText(this, "Marked selected as discarded", Toast.LENGTH_SHORT).show();
     }
 
     private void resetOverrides() {
         for (StudioPhoto p : photos) p.clearOverrides();
-        adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.notifyDataSetChanged();
         Toast.makeText(this, "Overrides cleared", Toast.LENGTH_SHORT).show();
     }
 
     private void refreshAll() {
-        adapter.notifyDataSetChanged();
-        updateSplitPreview();
+        if (adapter != null) adapter.notifyDataSetChanged();
+        if (rvSplitPreview != null) updateSplitPreview();
     }
 
     private void updateSplitPreview() {
+        if (rvSplitPreview == null || splitPreviewAdapter == null) return;
         if (photos.isEmpty() || config.splitMode == StudioConfig.SplitMode.NONE) {
             rvSplitPreview.setVisibility(View.GONE);
             return;
@@ -649,7 +653,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
                         else if ("V 2".equals(t)) p.overrideSplit = StudioConfig.SplitMode.VERTICAL_2;
                         else if ("H 2".equals(t)) p.overrideSplit = StudioConfig.SplitMode.HORIZONTAL_2;
                     }
-                    adapter.notifyItemChanged(pos);
+                    if (adapter != null) adapter.notifyItemChanged(pos);
                     refreshAll();
                 })
                 .setNegativeButton(R.string.cancel, null)
@@ -657,12 +661,12 @@ public class ResolutionStudioActivity extends AppCompatActivity {
 
         btnDiscard.setOnClickListener(x -> {
             p.discarded = !p.discarded;
-            adapter.notifyItemChanged(pos);
+            if (adapter != null) adapter.notifyItemChanged(pos);
             updateCounts();
         });
         btnClear.setOnClickListener(x -> {
             p.clearOverrides();
-            adapter.notifyItemChanged(pos);
+            if (adapter != null) adapter.notifyItemChanged(pos);
             Toast.makeText(this, "Cleared", Toast.LENGTH_SHORT).show();
         });
 

@@ -137,6 +137,20 @@ public class MainActivity extends AppCompatActivity {
             i.putExtra("folder", currentSourceFolder);
             startActivity(i);
         });
+        View btnToggle = findViewById(R.id.btnToggleCategories);
+        if (btnToggle != null) {
+            btnToggle.setOnClickListener(v -> {
+                boolean expanded = recyclerCategories.getVisibility() == View.VISIBLE;
+                int newVis = expanded ? View.GONE : View.VISIBLE;
+                recyclerCategories.setVisibility(newVis);
+                if (tvNoCategories != null) {
+                    boolean showEmpty = newVis == View.VISIBLE && (categoryList == null || categoryList.isEmpty());
+                    tvNoCategories.setVisibility(showEmpty ? View.VISIBLE : View.GONE);
+                }
+                v.setRotation(expanded ? 90 : 270);
+                v.setContentDescription(expanded ? "Expand folders" : "Collapse folders");
+            });
+        }
 
         currentSourceFolder = settings.getInboxFolder().getAbsolutePath();
         updateSourceButton();
@@ -146,7 +160,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateCategoriesEmptyState() {
         if (tvNoCategories != null) {
-            tvNoCategories.setVisibility(categoryList == null || categoryList.isEmpty() ? View.VISIBLE : View.GONE);
+            boolean expanded = recyclerCategories == null || recyclerCategories.getVisibility() == View.VISIBLE;
+            boolean show = expanded && (categoryList == null || categoryList.isEmpty());
+            tvNoCategories.setVisibility(show ? View.VISIBLE : View.GONE);
         }
     }
 

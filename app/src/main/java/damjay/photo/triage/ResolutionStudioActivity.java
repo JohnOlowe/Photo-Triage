@@ -32,6 +32,7 @@ import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,6 +69,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         setContentView(R.layout.activity_resolution_studio);
 
         settings = new SettingsManager(this);
+        // outputFolder will be derived as Folder_Name-adjusted inside current folder; init temp
         config.outputFolder = new File(settings.getRootFolder(), "Adjusted");
 
         Toolbar toolbar = findViewById(R.id.toolbarStudio);
@@ -122,7 +124,9 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             if (!cats.isEmpty()) defaultFolder = new File(settings.getRootFolder(), cats.get(0));
         }
         if (etFolder != null) etFolder.setText(defaultFolder.getAbsolutePath());
-        if (etOutput != null) etOutput.setText(config.outputFolder.getAbsolutePath());
+        File adjustedInit = getAdjustedFolder(defaultFolder);
+        config.outputFolder = adjustedInit;
+        if (etOutput != null) etOutput.setText(adjustedInit.getAbsolutePath());
 
         FolderPickerDialog.attach(this, etFolder, findViewById(R.id.btnBrowseStudioFolder), findViewById(R.id.btnPasteStudioFolder));
         FolderPickerDialog.attach(this, etOutput, findViewById(R.id.btnBrowseOutput), findViewById(R.id.btnPasteOutput));
@@ -167,16 +171,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             if (p != null) setBase(p);
         });
         View btnPagerDiscard = findViewById(R.id.btnPagerDiscard);
-        if (btnPagerDiscard != null) btnPagerDiscard.setOnClickListener(v -> {
-            StudioPhoto p = getCurrentPhoto();
-            if (p != null) {
-                p.discarded = !p.discarded;
-                pagerAdapter.notifyItemChanged(currentPos);
-                thumbsAdapter.notifyItemChanged(currentPos);
-                updatePagerOverlay(currentPos);
-                updateCounts();
-            }
-        });
+        if (btnPagerDiscard != null) btnPagerDiscard.setOnClickListener(v -> deleteCurrentPhoto());
         View btnToolPreview = findViewById(R.id.btnToolPreview);
         if (btnToolPreview != null) btnToolPreview.setOnClickListener(v -> showGridPreview());
 
@@ -312,6 +307,12 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             if (b != null) b.setOnClickListener(l);
         }
         highlightCrop(config.cropGravity);
+        View btnApply = findViewById(R.id.btnCropApply);
+        if (btnApply != null) btnApply.setOnClickListener(v -> applyCurrentCrop());
+        View btnReset = findViewById(R.id.btnCropReset);
+        if (btnReset != null) btnReset.setOnClickListener(v -> resetCurrentPhoto());
+        View btnDel = findViewById(R.id.btnCropDelete);
+        if (btnDel != null) btnDel.setOnClickListener(v -> deleteCurrentPhoto());
     }
 
     private void highlightCrop(StudioConfig.CropGravity g) {
@@ -459,7 +460,11 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             updatePagerOverlay(0);
             return;
         }
-        if (tvStudioStatus != null) tvStudioStatus.setText(R.string.status_running);
+        // Derive output as Folder_Name-adjusted inside current folder
+        File adj = getAdjustedFolder(dir);
+        config.outputFolder = adj;
+        if (etOutput != null) etOutput.setText(adj.getAbsolutePath());
+        if (tvStudioStatus != null) tvStudioStatus.setText("Folder: " + dir.getName() + " → " + adj.getName() + " • loading…");
         bgExecutor.execute(() -> {
             List<File> files = FileUtils.collectImages(dir, false, settings.getImageExtensions());
             files.sort(settings.getFileComparator());
@@ -489,6 +494,136 @@ public class ResolutionStudioActivity extends AppCompatActivity {
     private StudioPhoto getCurrentPhoto() {
         if (photos.isEmpty() || currentPos < 0 || currentPos >= photos.size()) return null;
         return photos.get(currentPos);
+    }
+
+    private File getAdjustedFolder(File source) {
+        if (source == null) return config.outputFolder != null ? config.outputFolder : new File(settings.getRootFolder(), "Adjusted");
+        String name = source.getName();
+        if (name == null || name.isEmpty()) name = source.getAbsolutePath().replaceAll(".*/", "");
+        if (name.isEmpty()) name = "Adjusted";
+        File adj = new File(source, name + "-adjusted");
+        // Also fallback to sibling if source is file? source is always folder
+        return adj;
+    }
+
+    private void applyCurrentCrop() {
+        StudioPhoto p = getCurrentPhoto();
+        if (p == null) {
+            Toast.makeText(this, R.string.studio_no_photos, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String srcPath = etFolder != null ? etFolder.getText().toString().trim() : "";
+        File srcDir = srcPath.isEmpty() ? null : new File(srcPath);
+        File outDir = getAdjustedFolder(srcDir != null ? srcDir : new File(p.file.getParent()));
+        if (!outDir.exists() && !outDir.mkdirs()) {
+            Toast.makeText(this, R.string.invalid_path, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        config.outputFolder = outDir;
+        if (etOutput != null) etOutput.setText(outDir.getAbsolutePath());
+        StudioConfig eff = p.effectiveConfig(config);
+        // Show preview exactly as will be saved — generate in background then save and replace stack
+        if (tvStudioStatus != null) tvStudioStatus.setText("Applying crop…");
+        View btnApply = findViewById(R.id.btnCropApply);
+        if (btnApply != null) btnApply.setEnabled(false);
+        bgExecutor.execute(() -> {
+            try {
+                // Single photo save: use processAndSave but index 0
+                List<File> outs = ImageProcessor.processAndSave(p.originalFile != null ? p.originalFile : p.file, outDir, eff, 0);
+                // If split, outs may contain multiple; for cropping Apply we take first and if split keep all? Use first for stack replacement
+                File saved = outs.isEmpty() ? null : outs.get(0);
+                List<String> scanned = new ArrayList<>();
+                for (File f : outs) scanned.add(f.getAbsolutePath());
+                FileUtils.scanMedia(ResolutionStudioActivity.this, scanned);
+                runOnUiThread(() -> {
+                    if (saved != null && saved.exists()) {
+                        // Delete previous edited file if different
+                        File oldEdited = p.editedFile;
+                        if (oldEdited != null && oldEdited.exists() && !oldEdited.getAbsolutePath().equals(saved.getAbsolutePath())) {
+                            oldEdited.delete();
+                            FileUtils.scanMedia(ResolutionStudioActivity.this, Collections.singletonList(oldEdited.getAbsolutePath()));
+                        }
+                        p.setEditedFile(saved);
+                        // If multiple splits, add them as extra photos after current
+                        if (outs.size() > 1) {
+                            int insertPos = currentPos + 1;
+                            for (int i = 1; i < outs.size(); i++) {
+                                File f = outs.get(i);
+                                StudioPhoto extra = new StudioPhoto(f);
+                                extra.setEditedFile(f);
+                                photos.add(insertPos, extra);
+                                insertPos++;
+                            }
+                            pagerAdapter.notifyDataSetChanged();
+                            thumbsAdapter.notifyDataSetChanged();
+                        } else {
+                            pagerAdapter.notifyItemChanged(currentPos);
+                            thumbsAdapter.notifyItemChanged(currentPos);
+                        }
+                        if (tvStudioStatus != null) tvStudioStatus.setText("Applied → " + saved.getName() + " in " + outDir.getName());
+                        Toast.makeText(this, "Applied to " + outDir.getName(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        if (tvStudioStatus != null) tvStudioStatus.setText("Apply failed");
+                        Toast.makeText(this, R.string.file_operation_failed, Toast.LENGTH_SHORT).show();
+                    }
+                    if (btnApply != null) btnApply.setEnabled(true);
+                    refreshCurrentOnly();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (tvStudioStatus != null) tvStudioStatus.setText("Apply error");
+                    Toast.makeText(this, "Apply failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    if (btnApply != null) btnApply.setEnabled(true);
+                });
+            }
+        });
+    }
+
+    private void resetCurrentPhoto() {
+        StudioPhoto p = getCurrentPhoto();
+        if (p == null) return;
+        if (!p.isEdited()) {
+            // also clear overrides
+            p.clearOverrides();
+            Toast.makeText(this, "Already original", Toast.LENGTH_SHORT).show();
+            refreshCurrentOnly();
+            return;
+        }
+        File edited = p.editedFile;
+        if (edited != null && edited.exists()) {
+            // Optionally delete edited file? Keep folder but remove file to revert? Spec says replaces with original
+            boolean del = edited.delete();
+            if (del) FileUtils.scanMedia(this, Collections.singletonList(edited.getAbsolutePath()));
+        }
+        p.resetEdit();
+        p.clearOverrides();
+        pagerAdapter.notifyItemChanged(currentPos);
+        thumbsAdapter.notifyItemChanged(currentPos);
+        refreshCurrentOnly();
+        if (tvStudioStatus != null) tvStudioStatus.setText("Reset to original");
+        Toast.makeText(this, "Reset", Toast.LENGTH_SHORT).show();
+    }
+
+    private void deleteCurrentPhoto() {
+        StudioPhoto p = getCurrentPhoto();
+        if (p == null) return;
+        // Remove from gallery (not just discarded flag) — spec: delete removes from swipe gallery
+        int pos = currentPos;
+        // If edited file exists, optionally delete it as well? Keep folder clean
+        if (p.editedFile != null && p.editedFile.exists()) {
+            p.editedFile.delete();
+        }
+        photos.remove(pos);
+        // Adjust currentPos if needed
+        if (pos >= photos.size() && photos.size() > 0) currentPos = photos.size() - 1;
+        if (photos.isEmpty()) currentPos = 0;
+        pagerAdapter.notifyDataSetChanged();
+        thumbsAdapter.notifyDataSetChanged();
+        updateCounts();
+        updatePagerOverlay(currentPos);
+        if (tvStudioStatus != null) tvStudioStatus.setText("Deleted • " + photos.size() + " left");
+        Toast.makeText(this, "Deleted from gallery", Toast.LENGTH_SHORT).show();
+        if (!photos.isEmpty() && vpStudio != null) vpStudio.setCurrentItem(Math.min(pos, photos.size()-1), true);
     }
 
     private void setBase(StudioPhoto p) {
@@ -851,8 +986,47 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
         @Override public void onBindViewHolder(VH h, int pos) {
             StudioPhoto p = photos.get(pos);
-            // Show actual image not cropped to fill (fitCenter inside 1:1 square) — user asked "not fit into view"
-            Glide.with(h.image.getContext()).load(p.file).fitCenter().into(h.image);
+            // If edited, show saved edited file directly (exactly what was Applied)
+            if (p.isEdited()) {
+                Glide.with(h.image.getContext()).load(p.editedFile).fitCenter().into(h.image);
+            } else {
+                // Show live transformed preview — exactly what Apply will save (before pressing)
+                // First show original quickly, then replace with transformed preview when ready
+                Glide.with(h.image.getContext()).load(p.getDisplayFile()).fitCenter().into(h.image);
+                StudioConfig eff = p.effectiveConfig(config);
+                // Only generate preview if there is an actual transformation (ratio/crop/fit/split) to preview
+                boolean needsTransform = eff.targetRatio > 0 || eff.fitMode != StudioConfig.FitMode.CROP || eff.cropGravity != StudioConfig.CropGravity.CENTER || eff.splitMode != StudioConfig.SplitMode.NONE;
+                // For simplicity generate preview always to show live result (user sees what Apply does)
+                bgExecutor.execute(() -> {
+                    try {
+                        // Ensure dimensions known for correct crop
+                        if (p.width == 0) {
+                            ImageProcessor.Dimensions d = ImageProcessor.getDimensions(p.file);
+                            p.setDimensions(d.width, d.height);
+                            runOnUiThread(() -> {
+                                if (pos == currentPos) updatePagerOverlay(currentPos);
+                            });
+                        }
+                        Bitmap src = ImageProcessor.loadBitmap(p.file, 900);
+                        if (src == null) return;
+                        int sw = src.getWidth();
+                        int sh = src.getHeight();
+                        Bitmap transformed = ImageProcessor.transform(src, eff, sw, sh);
+                        if (transformed == null) return;
+                        List<Bitmap> splits = ImageProcessor.split(transformed, eff);
+                        Bitmap toShow = splits.isEmpty() ? transformed : splits.get(0);
+                        for (int i = 1; i < splits.size(); i++) splits.get(i).recycle();
+                        runOnUiThread(() -> {
+                            // Only set if still at same position (avoid recycling wrong view after swipe)
+                            if (pos < photos.size() && photos.get(pos) == p && !p.isEdited()) {
+                                h.image.setImageBitmap(toShow);
+                            } else {
+                                toShow.recycle();
+                            }
+                        });
+                    } catch (Exception ignored) {}
+                });
+            }
             h.image.setOnLongClickListener(v -> { showPerPhotoEdit(p, pos); return true; });
             h.image.setOnTouchListener(new View.OnTouchListener() {
                 @Override public boolean onTouch(View v, MotionEvent event) { return false; }
@@ -891,7 +1065,7 @@ public class ResolutionStudioActivity extends AppCompatActivity {
         }
         @Override public void onBindViewHolder(VH h, int pos) {
             StudioPhoto p = photos.get(pos);
-            Glide.with(h.image.getContext()).load(p.file).centerCrop().into(h.image);
+            Glide.with(h.image.getContext()).load(p.getDisplayFile()).centerCrop().into(h.image);
             boolean isSel = pos == selected;
             h.selectedOverlay.setVisibility(isSel ? View.VISIBLE : View.GONE);
             View card = (View) h.itemView;
@@ -961,36 +1135,37 @@ public class ResolutionStudioActivity extends AppCompatActivity {
             h.discard.setVisibility(p.discarded ? View.VISIBLE : View.GONE);
             h.iv.setAlpha(p.discarded ? 0.5f : 1f);
 
-            // Lazy: first show original via Glide, then replace with transformed bitmap in background
-            Glide.with(h.iv.getContext()).load(p.file).fitCenter().into(h.iv);
-
-            // Generate transformed preview (small) off UI thread — true “as it currently is”
-            StudioConfig eff = p.effectiveConfig(config);
-            bgExecutor.execute(() -> {
-                try {
-                    Bitmap src = ImageProcessor.loadBitmap(p.file, 800);
-                    if (src == null) return;
-                    int sw = src.getWidth();
-                    int sh = src.getHeight();
-                    Bitmap transformed = ImageProcessor.transform(src, eff, sw, sh);
-                    if (transformed == null) return;
-                    List<Bitmap> splits = ImageProcessor.split(transformed, eff);
-                    Bitmap toShow;
-                    if (splits.isEmpty()) toShow = transformed;
-                    else {
-                        toShow = splits.get(0);
-                        for (int i = 1; i < splits.size(); i++) splits.get(i).recycle();
-                        // split() recycles transformed, so don't recycle it again
-                    }
-                    runOnUiThread(() -> {
-                        if (h.getAdapterPosition() == pos) {
-                            h.iv.setImageBitmap(toShow);
-                        } else {
-                            toShow.recycle();
+            // Lazy: first show original via Glide, then replace with transformed preview unless already edited
+            if (p.isEdited()) {
+                Glide.with(h.iv.getContext()).load(p.editedFile).fitCenter().into(h.iv);
+            } else {
+                Glide.with(h.iv.getContext()).load(p.file).fitCenter().into(h.iv);
+                StudioConfig eff = p.effectiveConfig(config);
+                bgExecutor.execute(() -> {
+                    try {
+                        Bitmap src = ImageProcessor.loadBitmap(p.file, 800);
+                        if (src == null) return;
+                        int sw = src.getWidth();
+                        int sh = src.getHeight();
+                        Bitmap transformed = ImageProcessor.transform(src, eff, sw, sh);
+                        if (transformed == null) return;
+                        List<Bitmap> splits = ImageProcessor.split(transformed, eff);
+                        Bitmap toShow;
+                        if (splits.isEmpty()) toShow = transformed;
+                        else {
+                            toShow = splits.get(0);
+                            for (int i = 1; i < splits.size(); i++) splits.get(i).recycle();
                         }
-                    });
-                } catch (Exception ignored) {}
-            });
+                        runOnUiThread(() -> {
+                            if (h.getAdapterPosition() == pos && !p.isEdited()) {
+                                h.iv.setImageBitmap(toShow);
+                            } else {
+                                toShow.recycle();
+                            }
+                        });
+                    } catch (Exception ignored) {}
+                });
+            }
 
             h.itemView.setOnClickListener(v -> {
                 if (listener != null) listener.onClick(pos);

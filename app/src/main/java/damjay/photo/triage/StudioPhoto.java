@@ -6,7 +6,9 @@ import java.io.File;
  * Single photo in Resolution Studio with per-photo state.
  */
 public class StudioPhoto {
-    public final File file;
+    public File file; // original file (in source folder) - mutable to allow reset
+    public final File originalFile; // keep original reference
+    public File editedFile = null; // file in Folder_Name-adjusted if edited
     public final String name;
     public int width = 0;  // original dimensions (0 if not yet decoded)
     public int height = 0;
@@ -27,7 +29,25 @@ public class StudioPhoto {
 
     public StudioPhoto(File file) {
         this.file = file;
+        this.originalFile = file;
         this.name = file.getName();
+    }
+
+    public File getDisplayFile() {
+        if (editedFile != null && editedFile.exists()) return editedFile;
+        return file;
+    }
+
+    public boolean isEdited() {
+        return editedFile != null && editedFile.exists();
+    }
+
+    public void setEditedFile(File f) {
+        this.editedFile = f;
+    }
+
+    public void resetEdit() {
+        this.editedFile = null;
     }
 
     public void setDimensions(int w, int h) {

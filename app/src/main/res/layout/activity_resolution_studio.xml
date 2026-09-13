@@ -607,6 +607,65 @@
                             <com.google.android.material.button.MaterialButton android:id="@+id/btnCropBothSides" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="40dp" android:layout_columnSpan="2" android:layout_columnWeight="2" android:text="@string/studio_crop_both_sides" android:textSize="11sp" app:icon="@drawable/ic_crop" app:cornerRadius="10dp" android:insetTop="0dp" android:insetBottom="0dp" app:iconSize="14dp"/>
                             <com.google.android.material.button.MaterialButton android:id="@+id/btnCropBothTB" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_height="40dp" android:layout_columnWeight="1" android:text="@string/studio_crop_both_tb" android:textSize="11sp" app:cornerRadius="10dp" android:insetTop="0dp" android:insetBottom="0dp"/>
                         </GridLayout>
+
+                        <!-- Per-photo Apply / Reset / Delete — replaces bulk export -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="horizontal"
+                            android:layout_marginTop="10dp"
+                            android:weightSum="3">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnCropApply"
+                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:layout_width="0dp"
+                                android:layout_height="40dp"
+                                android:layout_weight="1"
+                                android:text="Apply"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_check"
+                                app:iconSize="16dp"
+                                app:cornerRadius="10dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnCropReset"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="40dp"
+                                android:layout_weight="1"
+                                android:layout_marginStart="6dp"
+                                android:text="Reset"
+                                android:textSize="12sp"
+                                app:icon="@drawable/ic_undo"
+                                app:iconSize="16dp"
+                                app:cornerRadius="10dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnCropDelete"
+                                style="@style/Widget.Material3.Button.OutlinedButton"
+                                android:layout_width="0dp"
+                                android:layout_height="40dp"
+                                android:layout_weight="1"
+                                android:layout_marginStart="6dp"
+                                android:text="Delete"
+                                android:textSize="12sp"
+                                android:textColor="?attr/colorError"
+                                app:strokeColor="?attr/colorError"
+                                app:icon="@drawable/ic_discard"
+                                app:iconSize="16dp"
+                                app:iconTint="?attr/colorError"
+                                app:cornerRadius="10dp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Preview updates live — Apply saves to Folder-adjusted and replaces stack image"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="11sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -856,6 +915,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="44dp"
                     android:text="@string/studio_export"
+                    android:visibility="gone"
+                    tools:visibility="gone"
                     app:icon="@drawable/ic_check"
                     app:cornerRadius="12dp" />
             </LinearLayout>

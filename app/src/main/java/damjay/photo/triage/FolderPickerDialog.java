@@ -69,7 +69,7 @@ public class FolderPickerDialog {
 
         // Adapter holder
         final FolderAdapter[] adapterRef = new FolderAdapter[1];
-
+        final Runnable[] refreshHolder = new Runnable[1];
         Runnable refresh = new Runnable() {
             @Override
             public void run() {
@@ -86,13 +86,14 @@ public class FolderPickerDialog {
                 }
                 FolderAdapter adapter = new FolderAdapter(folders, folder -> {
                     current[0] = folder;
-                    run();
+                    if (refreshHolder[0] != null) refreshHolder[0].run();
                 });
                 adapterRef[0] = adapter;
                 rv.setAdapter(adapter);
                 btnUp.setEnabled(cur.getParentFile() != null);
             }
         };
+        refreshHolder[0] = refresh;
         refresh.run();
 
         btnUp.setOnClickListener(v -> {

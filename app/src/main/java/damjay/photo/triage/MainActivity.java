@@ -2,9 +2,7 @@ package damjay.photo.triage;
 
 import android.Manifest;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,42 +24,38 @@ import com.yuyakaido.android.cardstackview.CardStackView;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int REQUEST_STORAGE_PERMISSION = 100;
+
     private CardStackView cardStackView;
     private CardStackLayoutManager layoutManager;
     private PhotoAdapter adapter;
     private List<File> photoList;
-    
+
     private RecyclerView recyclerCategories;
     private CategoryAdapter categoryAdapter;
     private List<String> categoryList;
-    private SharedPreferences prefs;
+
+    private SettingsManager settings;
+    private String currentSourceFolder;
 
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
-
-    private static final String DEST_BASE_FOLDER = "/storage/emulated/0/Pictures/FSFUI Photos/";
-    // Make this dynamic instead of a constant
-    private String currentSourceFolder = DEST_BASE_FOLDER + "Ordered Photos";
-    
-    private static final String PREFS_NAME = "PhotoTriagePrefs";
-    private static final String KEY_CATEGORIES = "SavedCategories";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        settings = new SettingsManager(this);
+
         cardStackView = findViewById(R.id.cardStackView);
         recyclerCategories = findViewById(R.id.recyclerCategories);
-        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         loadCategories();
 
@@ -74,14 +68,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onCategoryLongClick(String categoryName, int position) {
                 new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Remove Folder?")
-                        .setMessage("Hide '" + categoryName + "' from this list?")
-                        .setPositiveButton("Remove", (dialog, which) -> {
+                        .setTitle(R.string.remove_folder_title)
+                        .setMessage(getString(R.string.remove_folder_message, categoryName))
+                        .setPositiveButton(R.string.remove, (dialog, which) -> {
                             categoryList.remove(position);
                             saveCategories();
                             categoryAdapter.notifyItemRemoved(position);
                         })
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(R.string.cancel, null)
                         .show();
             }
         });
@@ -91,57 +85,88 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btnReload).setOnClickListener(v -> loadPhotos());
         findViewById(R.id.btnAddCategory).setOnClickListener(v -> showAddCategoryDialog());
         findViewById(R.id.btnChangeSource).setOnClickListener(v -> showChangeSourceDialog());
-        
+        findViewById(R.id.btnSettings).setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
+        findViewById(R.id.btnTools).setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, ToolsActivity.class)));
+
+        currentSourceFolder = settings.getInboxFolder().getAbsolutePath();
+        updateSourceButton();
+
         checkPermissionsAndLoad();
-        // syncGitMessToHighRes();
     }
-    
+
+    private void updateSourceButton() {
+        MaterialButton btnSource = findViewById(R.id.btnChangeSource);
+        File source = new File(currentSourceFolder);
+        String name = source.getName();
+        if (name == null || name.isEmpty()) {
+            name = currentSourceFolder;
+        }
+        btnSource.setText(getString(R.string.source_button_format, name));
+    }
+
     private void showChangeSourceDialog() {
         List<String> options = new ArrayList<>();
-        options.add("Ordered Photos"); // The original root folder
-        options.addAll(categoryList); // All your custom folders
-        
+        options.add(settings.getInboxFolderName());
+        options.addAll(categoryList);
+        options.add(getString(R.string.custom_path_option));
+
         String[] optionsArray = options.toArray(new String[0]);
-        
+
         new AlertDialog.Builder(this)
-                .setTitle("Select Source Folder")
+                .setTitle(R.string.select_source_title)
                 .setItems(optionsArray, (dialog, which) -> {
+                    if (which == optionsArray.length - 1) {
+                        showCustomSourceDialog();
+                        return;
+                    }
                     String selected = optionsArray[which];
-                    currentSourceFolder = DEST_BASE_FOLDER + selected;
-                    
-                    MaterialButton btnSource = findViewById(R.id.btnChangeSource);
-                    btnSource.setText("Source: " + selected);
-                    
-                    loadPhotos(); // Reload the deck from the new folder
+                    currentSourceFolder = new File(settings.getRootFolder(), selected).getAbsolutePath();
+                    updateSourceButton();
+                    loadPhotos();
                 })
                 .show();
     }
 
+    private void showCustomSourceDialog() {
+        final EditText input = new EditText(this);
+        input.setHint(R.string.pref_root_folder_hint);
+        input.setText(currentSourceFolder);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.custom_source_title)
+                .setView(input)
+                .setPositiveButton(R.string.use, (dialog, which) -> {
+                    String path = input.getText().toString().trim();
+                    if (path.isEmpty()) {
+                        Toast.makeText(this, R.string.error_empty_value, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    currentSourceFolder = path;
+                    updateSourceButton();
+                    loadPhotos();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
     private void loadCategories() {
-        Set<String> savedCategories = prefs.getStringSet(KEY_CATEGORIES, null);
-        categoryList = new ArrayList<>();
-        
-        if (savedCategories == null || savedCategories.isEmpty()) {
-            categoryList.addAll(Arrays.asList("Worship", "Prayer", "Choir Ministration", "Sermon", "Drama"));
-            saveCategories();
-        } else {
-            categoryList.addAll(savedCategories);
-        }
+        categoryList = settings.getCategories();
     }
 
     private void saveCategories() {
-        Set<String> set = new HashSet<>(categoryList);
-        prefs.edit().putStringSet(KEY_CATEGORIES, set).apply();
+        settings.setCategories(categoryList);
     }
-    
+
     private void showAddCategoryDialog() {
         final EditText input = new EditText(this);
-        input.setHint("e.g. Testimonies");
+        input.setHint(R.string.folder_hint);
 
         new AlertDialog.Builder(this)
-                .setTitle("Add New Folder")
+                .setTitle(R.string.add_folder_title)
                 .setView(input)
-                .setPositiveButton("Add", (dialog, which) -> {
+                .setPositiveButton(R.string.add, (dialog, which) -> {
                     String newCategory = input.getText().toString().trim();
                     if (!newCategory.isEmpty() && !categoryList.contains(newCategory)) {
                         categoryList.add(newCategory);
@@ -149,21 +174,35 @@ public class MainActivity extends AppCompatActivity {
                         categoryAdapter.notifyItemInserted(categoryList.size() - 1);
                         recyclerCategories.smoothScrollToPosition(categoryList.size() - 1);
                     } else {
-                        Toast.makeText(this, "Empty or duplicate name", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.empty_or_duplicate, Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-            if (adapter == null || adapter.getItemCount() == 0) {
-                loadPhotos();
-            }
+
+        // Fall back to the configured inbox if the current source no longer exists.
+        File current = new File(currentSourceFolder);
+        if (!current.exists() || !current.isDirectory()) {
+            currentSourceFolder = settings.getInboxFolder().getAbsolutePath();
         }
+        updateSourceButton();
+
+        if (canReadStorage() && (adapter == null || adapter.getItemCount() == 0)) {
+            loadPhotos();
+        }
+    }
+
+    private boolean canReadStorage() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        }
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
     }
 
     private void checkPermissionsAndLoad() {
@@ -174,20 +213,20 @@ public class MainActivity extends AppCompatActivity {
                     intent.addCategory("android.intent.category.DEFAULT");
                     intent.setData(Uri.parse(String.format("package:%s", getPackageName())));
                     startActivity(intent);
-                    Toast.makeText(this, "Please grant All Files Access and press back", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, R.string.grant_all_files_access, Toast.LENGTH_LONG).show();
                 } catch (Exception e) {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                    startActivity(intent);
+                    startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
                 }
             } else {
                 loadPhotos();
             }
         } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE, 
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
                         Manifest.permission.READ_EXTERNAL_STORAGE
-                }, 100);
+                }, REQUEST_STORAGE_PERMISSION);
             } else {
                 loadPhotos();
             }
@@ -197,10 +236,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == REQUEST_STORAGE_PERMISSION && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             loadPhotos();
         } else {
-            Toast.makeText(this, "Permission denied.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -211,155 +251,51 @@ public class MainActivity extends AppCompatActivity {
         if (directory.exists() && directory.isDirectory()) {
             File[] files = directory.listFiles();
             if (files != null) {
-                java.util.Arrays.sort(files, (f1, f2) -> f1.getName().compareToIgnoreCase(f2.getName()));
-
                 for (File file : files) {
-                    String name = file.getName().toLowerCase();
-                    if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png")) {
+                    if (file.isFile() && settings.isSupportedImage(file)) {
                         photoList.add(file);
                     }
                 }
+                photoList.sort(settings.getFileComparator());
             }
         } else {
-            Toast.makeText(this, "Folder is empty or missing.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.folder_missing, Toast.LENGTH_SHORT).show();
         }
 
-        adapter = new PhotoAdapter(photoList);
+        adapter = new PhotoAdapter(photoList, settings.getLabelMode());
         layoutManager = new CardStackLayoutManager(this);
         cardStackView.setLayoutManager(layoutManager);
         cardStackView.setAdapter(adapter);
     }
 
     private void processPhoto(String categoryName) {
-        if (layoutManager == null || photoList == null) return;
-        
+        if (layoutManager == null || photoList == null) {
+            return;
+        }
+
         int currentPosition = layoutManager.getTopPosition();
-        
+
         if (currentPosition < photoList.size()) {
             File currentFile = photoList.get(currentPosition);
 
             if (categoryName != null) {
-                executorService.execute(() -> moveFile(currentFile, categoryName));
+                executorService.execute(() -> performFileOperation(currentFile, categoryName));
             }
-            
+
             cardStackView.swipe();
         }
     }
 
-    private void moveFile(File sourceFile, String categoryName) {
-        File destDir = new File(DEST_BASE_FOLDER + categoryName);
-        if (!destDir.exists()) {
-            destDir.mkdirs();
-        }
-
-        File destFile = new File(destDir, sourceFile.getName());
-        
-        // Don't try to move the file if you're already in that folder, genius.
-        if (sourceFile.getAbsolutePath().equals(destFile.getAbsolutePath())) {
-            return;
-        }
-
-        boolean success = sourceFile.renameTo(destFile);
-
-        if (success) {
-            MediaScannerConnection.scanFile(this, new String[]{destFile.getAbsolutePath()}, null, null);
-        }
-    }
-    
-    private void syncGitMessToHighRes() {
-        File gitBaseDir = new File("/storage/emulated/0/FSFUI-Photos");
-        File destBaseDir = new File("/storage/emulated/0/Pictures/FSFUI Photos");
-        File orderedDir = new File(destBaseDir, "Ordered Photos");
-
-        if (!gitBaseDir.exists() || !orderedDir.exists()) {
-            android.widget.Toast.makeText(this, "Directories missing.", android.widget.Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        java.util.List<String> filesToScan = new java.util.ArrayList<>();
-        File[] gitFolders = gitBaseDir.listFiles();
-        if (gitFolders == null) return;
-
-        for (File gFolder : gitFolders) {
-            if (gFolder.isDirectory() && gFolder.getName().matches("^\\d+.*")) {
-                
-                // Map the folders properly
-                String destFolderName = gFolder.getName().replaceFirst("^\\d+_", "").replace("_", " ");
-                if (gFolder.getName().contains("Sunday_School")) destFolderName = "Sunday School";
-                if (gFolder.getName().contains("Sermon_Teaching")) destFolderName = "Teaching";
-                if (gFolder.getName().contains("Choir_Ministration")) destFolderName = "Ministration";
-                
-                File destFolder = new File(destBaseDir, destFolderName);
-
-                if (!destFolder.exists()) {
-                    destFolder.mkdirs();
-                } else {
-                    File[] existingFiles = destFolder.listFiles();
-                    if (existingFiles != null) {
-                        for (File f : existingFiles) {
-                            if (f.isFile() && f.getName().toLowerCase().endsWith(".jpg")) {
-                                f.delete();
-                            }
-                        }
-                    }
-                }
-
-                File[] lowResFiles = gFolder.listFiles();
-                if (lowResFiles != null) {
-                    for (File lowRes : lowResFiles) {
-                        if (lowRes.isFile()) {
-                            // Strip the leading numbers and underscore from the Git filename
-                            String realName = lowRes.getName().replaceFirst("^\\d+_", "");
-                            File highRes = new File(orderedDir, realName);
-                            
-                            if (highRes.exists()) {
-                                // Save it with the clean, original name
-                                File targetHighRes = new File(destFolder, realName);
-                                if (highRes.renameTo(targetHighRes)) {
-                                    filesToScan.add(targetHighRes.getAbsolutePath());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (!filesToScan.isEmpty()) {
-            android.media.MediaScannerConnection.scanFile(this, filesToScan.toArray(new String[0]), null, null);
-            android.widget.Toast.makeText(this, "Cleaned up and moved " + filesToScan.size() + " photos.", android.widget.Toast.LENGTH_LONG).show();
+    private void performFileOperation(File sourceFile, String categoryName) {
+        File destDir = settings.getFolderForCategory(categoryName);
+        File target = FileUtils.moveOrCopy(sourceFile, destDir, settings.isMoveOperation());
+        if (target != null) {
+            FileUtils.scanMedia(this, Collections.singletonList(target.getAbsolutePath()));
         } else {
-            android.widget.Toast.makeText(this, "No matches found. Check your file names again.", android.widget.Toast.LENGTH_LONG).show();
+            runOnUiThread(() ->
+                    Toast.makeText(MainActivity.this, R.string.file_operation_failed, Toast.LENGTH_SHORT).show());
         }
     }
-    
-    private void fixGitPhotoMess() {
-        // Notice the hyphen, matching your screenshot
-        File baseDir = new File("/storage/emulated/0/Pictures/FSFUI-Photos");
-        java.util.List<String> paths = new java.util.ArrayList<>();
-
-        File[] folders = baseDir.listFiles();
-        if (folders == null) return;
-
-        for (File folder : folders) {
-            // Only look at folders starting with a number (ignores .git and README.md)
-            if (folder.isDirectory() && folder.getName().matches("^\\d+.*")) {
-                File[] images = folder.listFiles();
-                if (images != null) {
-                    for (File img : images) {
-                        paths.add(img.getAbsolutePath());
-                    }
-                }
-            }
-        }
-
-        if (!paths.isEmpty()) {
-            // Blast the whole array to the media scanner at once
-            android.media.MediaScannerConnection.scanFile(this, paths.toArray(new String[0]), null, null);
-            android.widget.Toast.makeText(this, "Scanned " + paths.size() + " files. Check Instagram.", android.widget.Toast.LENGTH_LONG).show();
-        }
-    }
-
 
     @Override
     protected void onDestroy() {

@@ -12,19 +12,25 @@ import com.bumptech.glide.Glide;
 
 import java.io.File;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHolder> {
 
-    private List<File> photos;
+    // Look for the standard iPhone IMG_XXXX or IMG_EXXXX pattern.
+    private static final Pattern IPHONE_NUMBER_PATTERN = Pattern.compile("(?i)IMG_[A-Z]?(\\d+)");
 
-    public PhotoAdapter(List<File> photos) {
+    private final List<File> photos;
+    private final String labelMode;
+
+    public PhotoAdapter(List<File> photos, String labelMode) {
         this.photos = photos;
+        this.labelMode = labelMode == null ? SettingsManager.LABEL_AUTO : labelMode;
     }
 
     @NonNull
     @Override
     public PhotoViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        // Inflate the photo card layout
         View view = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.item_photo_card, parent, false);
         return new PhotoViewHolder(view);
@@ -33,19 +39,24 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
     @Override
     public void onBindViewHolder(@NonNull PhotoViewHolder holder, int position) {
         File photoFile = photos.get(position);
-        
+
         Glide.with(holder.imageView.getContext())
                 .load(photoFile)
                 .into(holder.imageView);
 
-        String filename = photoFile.getName();
-        // Look for the standard iPhone IMG_XXXX or IMG_EXXXX pattern
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)IMG_[A-Z]?(\\d+)").matcher(filename);
-        
-        // If it finds the iPhone number, use it. Otherwise, spit out the whole filename.
-        String displayText = m.find() ? m.group(1) : filename;
-        
-        holder.tvCounter.setText(displayText);
+        holder.tvCounter.setText(labelFor(photoFile, position));
+    }
+
+    private String labelFor(File photoFile, int position) {
+        if (SettingsManager.LABEL_FILENAME.equals(labelMode)) {
+            return photoFile.getName();
+        }
+        if (SettingsManager.LABEL_INDEX.equals(labelMode)) {
+            return String.valueOf(position + 1);
+        }
+        // Auto: extract the iPhone number, falling back to the full filename.
+        Matcher matcher = IPHONE_NUMBER_PATTERN.matcher(photoFile.getName());
+        return matcher.find() ? matcher.group(1) : photoFile.getName();
     }
 
     @Override
@@ -53,19 +64,14 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
         return photos == null ? 0 : photos.size();
     }
 
-    // Helper method so we can retrieve the current file list later
-    public List<File> getPhotos() {
-        return photos;
-    }
-
     static class PhotoViewHolder extends RecyclerView.ViewHolder {
         ImageView imageView;
-        android.widget.TextView tvCounter; // Add this
+        android.widget.TextView tvCounter;
 
         PhotoViewHolder(@NonNull View itemView) {
             super(itemView);
             imageView = itemView.findViewById(R.id.imageViewPhoto);
-            tvCounter = itemView.findViewById(R.id.tvCounter); // Add this
+            tvCounter = itemView.findViewById(R.id.tvCounter);
         }
     }
 }
